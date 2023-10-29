@@ -1,0 +1,16 @@
+const mongoose = require("mongoose");
+const Schema = mongoose.Schema;
+
+const schema = new Schema({
+  name : { type: String, default: "" },
+  code : { type: String, default: "" },  
+  //state: { type: mongoose.Schema.Types.ObjectId, ref: "State" },
+  createdDate: { type: Date, default: Date.now },
+  modifiedDate: { type: Date, default: Date.now },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  modifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+});
+
+schema.set("toJSON", { virtuals: true });
+
+module.exports = mongoose.model("Competencymaster", schema);
