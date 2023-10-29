@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const config = require('config.json');
 const compression = require("compression");
 const express = require("express");
 const app = express();
