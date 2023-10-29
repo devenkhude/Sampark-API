@@ -38,12 +38,7 @@ app.use(async (req, res, next) => {
   } catch (error) {
     console.error('Error connecting to the database:', error);
     res.status(500).json({ error: 'Database connection error' });
-  } finally {
-    // Close the database connection after the response is sent
-    if (req.db) {
-      req.db.connection.close();
-    }
-  }
+  } 
 });
 
 require('./elearnings/courses.js')(app)
