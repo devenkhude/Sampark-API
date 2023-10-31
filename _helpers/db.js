@@ -1,42 +1,43 @@
 const config = require('../config.json');
-// const mongoose = require('mongoose');
+const mongoose = require('mongoose');
 
-// mongoose.connect(process.env.MONGODB_URI || config.connectionString, {
-//   useNewUrlParser: true,
-//   useUnifiedTopology: true,
-//   useFindAndModify: false,
-//   useCreateIndex: true,
-// });
+mongoose.connect(process.env.MONGODB_URI || config.connectionString, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useFindAndModify: false,
+  useCreateIndex: true,
+  poolSize: 25,
+});
 
-// const db = mongoose.connection;
+const db = mongoose.connection;
 
-// // Event listeners to handle connection events
-// db.on('connected', () => {
-//   console.log('Connected to MongoDB');
-// });
+// Event listeners to handle connection events
+db.on('connected', () => {
+  console.log('Connected to MongoDB');
+});
 
-// db.on('error', (err) => {
-//   console.error('MongoDB connection error:', err);
-// });
+db.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
 
-// db.on('disconnected', () => {
-//   console.log('MongoDB disconnected');
-// });
+db.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
 
-// // Function to gracefully close the connection
-// const gracefulShutdown = (msg, callback) => {
-//   db.close(() => {
-//     console.log(`Mongoose disconnected through ${msg}`);
-//     callback();
-//   });
-// };
+// Function to gracefully close the connection
+const gracefulShutdown = (msg, callback) => {
+  db.close(() => {
+    console.log(`Mongoose disconnected through ${msg}`);
+    callback();
+  });
+};
 
-// // Listen for process termination or restart events
-// process.on('SIGINT', () => {
-//   gracefulShutdown('app termination', () => {
-//     process.exit(0);
-//   });
-// });
+// Listen for process termination or restart events
+process.on('SIGINT', () => {
+  gracefulShutdown('app termination', () => {
+    process.exit(0);
+  });
+});
 
 // Reuseable connection object
 // module.exports = db;

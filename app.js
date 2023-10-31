@@ -26,25 +26,6 @@ app.use(cors());
 app.use(jwt());
 app.use(errorHandler);
 
-app.use(async (req, res, next) => {
-  try {
-    const db = await mongoose.connect(process.env.MONGODB_URI || config.connectionString, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useCreateIndex: true,
-    });
-    req.db = db; // Attach the database connection to the request object
-    next();
-  } catch (error) {
-    console.error('Error connecting to the database:', error);
-    res.status(500).json({ error: 'Database connection error' });
-  } finally {
-    if (req.db) {
-      req.db.connection.close();
-    }
-  }
-});
-
 require('./elearnings/courses.js')(app)
 require('./elearnings/discussions.js')(app)
 require("./scertstreams/scertstreams.js")(app);
