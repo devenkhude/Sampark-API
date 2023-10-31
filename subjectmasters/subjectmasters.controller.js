@@ -1,5 +1,6 @@
 ﻿const express = require('express');
 const router = express.Router();
+const db = require('../_helpers/db');
 const subjectmasterService = require('./subjectmaster.service');
 
 // routes
@@ -20,7 +21,8 @@ function create(req, res, next) {
 function getAllWithDepartments(req, res, next) {
     subjectmasterService.getAllWithDepartments()
         .then(subjectmasters => res.json(subjectmasters))
-        .catch(err => next(err));
+        .catch(err => next(err))
+        .finally(() => db.releasepool());
 }
 
 function getAll(req, res, next) {
