@@ -22,85 +22,77 @@ module.exports = {
  * @returns department wise subjects list
  * */
 async function getAllWithDepartments() {
-  let subjects = {};
-  let final_data = {};
-  final_data["sss"] = [];
-  final_data["sst"] = [];
-  final_data["ssh"] = [];
-  final_data["sa"] = [];
-  final_data["elearning"] = [];
-  final_data["dd"] = [];
   try {
-    const subject_masters = await Subjectmaster.find()
+    const subjectMasters = await Subjectmaster.find()
       .sort({ sort_order: 1 })
       .select("-hash");
-    const department_masters = await Departmentmaster.find()
+
+    const departmentMasters = await Departmentmaster.find()
       .sort({ sort_order: 1 })
       .select("-hash");
-    if (subject_masters && subject_masters.length > 0) {
-      subject_masters.forEach((subject) => {
-        subjects[subject["id"]] = {};
-        subjects[subject["id"]]["id"] = subject["id"];
-        subjects[subject["id"]]["name"] = subject["name"];
-        if (subject["icon"]) {
-          subjects[subject["id"]]["icon"] =
-            config.repositoryHost + subject["icon"];
-        } else {
-          subjects[subject["id"]]["icon"] =
-            config.assetHost + subject["name"].toLowerCase() + ".png";
-        }
-        if (subject["activeicon"]) {
-          subjects[subject["id"]]["icon_active"] =
-            config.repositoryHost + subject["activeicon"];
-        } else {
-          subjects[subject["id"]]["icon_active"] =
-            config.assetHost + "big-" + subject["name"].toLowerCase() + ".png";
-        }
-        subjects[subject["id"]]["module"] = subject["module"];
-        subjects[subject["id"]]["is_default"] = subject["is_default"];
-        subjects[subject["id"]]["registration_name"] = subject[
-          "registration_name"
-        ]
-          ? subject["registration_name"]
-          : subject["name"];
-        subjects[subject["id"]]["for_registration"] = subject[
-          "for_registration"
-        ]
-          ? subject["for_registration"]
-          : false;
-        subjects[subject["id"]]["departments"] = [];
-      });
+
+    if (!subjectMasters.length || !departmentMasters.length) {
+      throw new Error("No data found.");
     }
 
-    if (department_masters && department_masters > 0) {
-      department_masters.forEach((department) => {
-        let department_subjects = department["subjects"];
-        if (department_subjects && department_subjects.length > 0) {
-          department_subjects.forEach((dep_subject) => {
-            let department_master = {};
-            department_master["id"] = department["id"];
-            department_master["name"] = department["name"];
-            if (subjects[dep_subject]["departments"].length == 0) {
-              department_master["is_default"] = true; //department_masters[i]["is_default"];
-            } else {
-              department_master["is_default"] = false; //department_masters[i]["is_default"];
-            }
-            subjects[dep_subject]["departments"].push(department_master);
-          });
-        }
-      });
-    }
-    let subjects_with_departments = [];
-    for (const [key, value] of Object.entries(subjects)) {
-      if (final_data[value.module] && final_data[value.module].length == 0) {
-        value["is_default"] = true;
-      } else {
-        value["is_default"] = false;
+    const finalData = {
+      sss: [],
+      sst: [],
+      ssh: [],
+      sa: [],
+      elearning: [],
+      dd: [],
+    };
+
+    const subjects = {};
+
+    // Create subjects and map departments
+    subjectMasters.forEach((subject) => {
+      const subjectId = subject.id;
+      subjects[subjectId] = {
+        id: subjectId,
+        name: subject.name,
+        icon: subject.icon
+          ? config.repositoryHost + subject.icon
+          : config.assetHost + subject.name.toLowerCase() + ".png",
+        icon_active: subject.activeicon
+          ? config.repositoryHost + subject.activeicon
+          : config.assetHost + "big-" + subject.name.toLowerCase() + ".png",
+        module: subject.module,
+        is_default: subject.is_default,
+        registration_name: subject.registration_name || subject.name,
+        for_registration: subject.for_registration || false,
+        departments: [],
+      };
+    });
+
+    // Map departments to subjects
+    departmentMasters.forEach((department) => {
+      const departmentSubjects = department.subjects;
+      if (departmentSubjects.length > 0) {
+        departmentSubjects.forEach((depSubject) => {
+          const departmentMaster = {
+            id: department.id,
+            name: department.name,
+            is_default: subjects[depSubject].departments.length === 0,
+          };
+          subjects[depSubject].departments.push(departmentMaster);
+        });
       }
-      if (final_data[value.module]) final_data[value.module].push(value);
-      subjects_with_departments.push(value);
-    }
-    return final_data;
+    });
+
+    // Create subjects_with_departments and populate finalData
+    const subjectsWithDepartments = Object.values(subjects);
+    subjectsWithDepartments.forEach((value) => {
+      if (finalData[value.module].length === 0) {
+        value.is_default = true;
+      } else {
+        value.is_default = false;
+      }
+      finalData[value.module].push(value);
+    });
+
+    return finalData;
   } catch (err) {
     throw new Error(err.message);
   }
