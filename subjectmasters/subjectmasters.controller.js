@@ -23,7 +23,7 @@ function getAllWithDepartments(req, res, next) {
         .then(subjectmasters => res.json(subjectmasters))
         .catch(err => next(err))
         .finally(() =>  {
-            db.releasepool();
+            db.release();
             console.log("Connection released");
         });
 }
