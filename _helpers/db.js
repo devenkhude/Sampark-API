@@ -43,6 +43,7 @@ process.on('SIGINT', () => {
 // module.exports = db;
 
 module.exports = {
+  db: db,
   User: require('../_models/user.model'),
   Userimage: require('../_models/userimage.model'),
   Uservideo: require('../_models/uservideo.model'),
