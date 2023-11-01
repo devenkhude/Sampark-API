@@ -86,7 +86,7 @@ async function performApiLogic() {
   }
 }
 
-const result = await performApiLogic();
+const result = performApiLogic();
 parentPort.postMessage(result);
 
 parentPort.on("message", async (message) => {
