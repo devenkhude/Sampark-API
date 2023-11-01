@@ -86,11 +86,12 @@ async function performApiLogic() {
   }
 }
 
-parentPort.on("message", async (message) => {
-  if (message.api === "getAllWithDepartments") {
-    // Implement logic for API 1
-    const result = await performApiLogic();
-    parentPort.postMessage(result);
-  }
-  // Add more conditions for other APIs if needed
-});
+const result =  performApiLogic();
+parentPort.postMessage(result);
+
+// parentPort.on("message", async (message) => {
+//   if (message.api === "getAllWithDepartments") {
+//     // Implement logic for API 1
+//   }
+//   // Add more conditions for other APIs if needed
+// });
