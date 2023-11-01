@@ -27,6 +27,7 @@ function getAllWithDepartments() {
   return new Promise((resolve, reject) => {
     if (isMainThread) {
       const worker = new Worker(path.resolve(__dirname, 'worker.js'), { workerData: { api: 'getAllWithDepartments' } });
+      worker.postMessage({ api: 'getAllWithDepartments' });
 
       worker.on('message', (result) => {
         console.log("Service Result: ", JSON.parse(result));
