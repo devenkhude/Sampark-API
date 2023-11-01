@@ -21,7 +21,7 @@ function create(req, res, next) {
 
 function getAllWithDepartments(req, res, next) {
   if (isMainThread) {
-    const worker = new Worker(require('./worker'), { workerData: { api: 'getAllWithDepartments' } });
+    const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
 
     worker.on('message', (result) => {
       res.json(result);
