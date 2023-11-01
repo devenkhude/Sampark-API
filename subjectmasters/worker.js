@@ -1,28 +1,31 @@
 const { parentPort } = require("worker_threads");
 const config = require("../config.json");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 const db = require("../_helpers/db");
 const commonmethods = require("../_helpers/commonmethods");
-const get_current_user = commonmethods.get_current_user;
 const Subjectmaster = db.Subjectmaster;
-const Video = db.Video;
 const Departmentmaster = db.Departmentmaster;
 
 async function performApiLogic() {
   try {
-    const subjectMasters = await Subjectmaster.find()
-      .sort({ sort_order: 1 })
-      .select("-hash");
-
-    const departmentMasters = await Departmentmaster.find()
-      .sort({ sort_order: 1 })
-      .select("-hash");
+    // Fetch subject and department data with selective projection
+    const [subjectMasters, departmentMasters] = await Promise.all([
+      Subjectmaster.find()
+        .sort({ sort_order: 1 })
+        .select(
+          "id name icon activeicon module is_default registration_name for_registration"
+        ),
+      Departmentmaster.find()
+        .sort({ sort_order: 1 })
+        .select("id name subjects"),
+    ]);
 
     if (!subjectMasters.length || !departmentMasters.length) {
       throw new Error("No data found.");
     }
 
+    // Assuming subject_masters and department_masters are arrays
+
+    const subjects = {};
     const finalData = {
       sss: [],
       sst: [],
@@ -32,9 +35,7 @@ async function performApiLogic() {
       dd: [],
     };
 
-    const subjects = {};
-
-    // Create subjects and map departments
+    // Process subject_masters
     subjectMasters.forEach((subject) => {
       const subjectId = subject.id;
       subjects[subjectId] = {
@@ -54,19 +55,17 @@ async function performApiLogic() {
       };
     });
 
-    // Map departments to subjects
+    // Process department_masters
     departmentMasters.forEach((department) => {
       const departmentSubjects = department.subjects;
-      if (departmentSubjects.length > 0) {
-        departmentSubjects.forEach((depSubject) => {
-          const departmentMaster = {
-            id: department.id,
-            name: department.name,
-            is_default: subjects[depSubject].departments.length === 0,
-          };
-          subjects[depSubject].departments.push(departmentMaster);
-        });
-      }
+      departmentSubjects.forEach((depSubject) => {
+        const departmentMaster = {
+          id: department.id,
+          name: department.name,
+          is_default: subjects[depSubject].departments.length === 0,
+        };
+        subjects[depSubject].departments.push(departmentMaster);
+      });
     });
 
     // Create subjects_with_departments and populate finalData
@@ -80,27 +79,22 @@ async function performApiLogic() {
       finalData[value.module].push(value);
     });
 
-    return subjectMasters;
+    return finalData;
   } catch (err) {
-    console.log("Catch Exception: ", err);
+    console.error("Catch Exception: ", err);
     throw new Error(err.message);
   }
 }
 
-// performApiLogic().then((data) => {
-//   console.log("Worker Thread Success: ", data);
-//   parentPort.postMessage(JSON.stringify(data));
-// }).catch((err) => {
-//   console.log("Worker Thread: ", err);
-// });
-
 parentPort.on("message", async (message) => {
   if (message.api === "getAllWithDepartments") {
-    // Implement logic for API 1
-    console.log("Worker Message: ", message);
-    const result = await performApiLogic();
-    console.log("Worker Result: ", result);
-    parentPort.postMessage(result);
+    try {
+      const result = await performApiLogic();
+      console.log("Worker Result: ", result);
+      parentPort.postMessage(result);
+    } catch (error) {
+      console.error("Worker Error: ", error);
+      parentPort.postMessage({ error: error.message });
+    }
   }
-  // Add more conditions for other APIs if needed
 });
