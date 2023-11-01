@@ -1,6 +1,5 @@
 ﻿const { Worker, isMainThread, parentPort } = require('worker_threads');
 const express = require("express");
-const workerFile = require('./worker');
 const router = express.Router();
 const subjectmasterService = require("./subjectmaster.service");
 
@@ -22,7 +21,7 @@ function create(req, res, next) {
 
 function getAllWithDepartments(req, res, next) {
   if (isMainThread) {
-    const worker = new Worker(workerFile, { workerData: { api: 'getAllWithDepartments' } });
+    const worker = new Worker(require('./worker'), { workerData: { api: 'getAllWithDepartments' } });
 
     worker.on('message', (result) => {
       res.json(result);
