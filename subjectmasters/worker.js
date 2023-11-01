@@ -89,8 +89,8 @@ async function performApiLogic() {
 parentPort.on("message", async (message) => {
   if (message.api === "getAllWithDepartments") {
     // Implement logic for API 1
-    const result = await performApiLogic();
-    parentPort.postMessage(result);
+    // const result = await performApiLogic();
+    parentPort.postMessage('Hello');
   }
   // Add more conditions for other APIs if needed
 });
