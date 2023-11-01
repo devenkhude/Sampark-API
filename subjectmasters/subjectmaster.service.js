@@ -26,11 +26,10 @@ module.exports = {
 function getAllWithDepartments() {
   return new Promise((resolve, reject) => {
     if (isMainThread) {
-      const worker = new Worker(path.resolve(__dirname, 'worker.js'), { workerData: { api: 'getAllWithDepartments' } });
+      const worker = new Worker(path.resolve(__dirname, 'worker.js'));
       worker.postMessage({ api: 'getAllWithDepartments' });
 
       worker.on('message', (result) => {
-        console.log("Service Result: ", JSON.parse(result));
         resolve(JSON.parse(result)); // Resolve the promise with the result from the worker
       });
 
