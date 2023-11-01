@@ -82,6 +82,7 @@ async function performApiLogic() {
 
     return subjectMasters;
   } catch (err) {
+    console.log("Catch Exception: ", err);
     throw new Error(err.message);
   }
 }

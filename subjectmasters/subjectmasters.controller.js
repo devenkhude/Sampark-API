@@ -20,17 +20,10 @@ function create(req, res, next) {
 }
 
 function getAllWithDepartments(req, res, next) {
-  if (isMainThread) {
-    const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
-
-    worker.on('message', (result) => {
-      res.json(result);
-    });
-  }
-  // subjectmasterService
-  //   .getAllWithDepartments()
-  //   .then((subjectmasters) => res.json(subjectmasters))
-  //   .catch((err) => next(err));
+  subjectmasterService
+    .getAllWithDepartments()
+    .then((subjectmasters) => res.json(subjectmasters))
+    .catch((err) => next(err));
 }
 
 function getAll(req, res, next) {

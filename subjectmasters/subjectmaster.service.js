@@ -23,13 +23,24 @@ module.exports = {
  * @returns department wise subjects list
  * */
 function getAllWithDepartments() {
-  if (isMainThread) {
-    const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
+  return new Promise((resolve, reject) => {
+    if (isMainThread) {
+      const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
 
-    worker.on('message', (result) => {
-      return result;
-    });
-  }
+      worker.on('message', (result) => {
+        console.log("Service Result: ", result);
+        resolve(result); // Resolve the promise with the result from the worker
+      });
+
+      worker.on('error', (error) => {
+        console.log("Service Error: ", error);
+        reject(error); // Reject the promise if there's an error in the worker
+      });
+    } else {
+      console.log("Service Else Block: ");
+      // This is the worker thread; perform the task here
+    }
+  });
 }
 
 /**
