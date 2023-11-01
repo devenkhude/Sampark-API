@@ -46,6 +46,7 @@ app.get("/subjects/withdepartments", (req, res) => {
     });
 
     worker.on("message", (result) => {
+      console.log("App Result: ", result);
       res.json(result);
     });
   }

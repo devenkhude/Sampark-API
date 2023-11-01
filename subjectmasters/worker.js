@@ -87,6 +87,7 @@ async function performApiLogic() {
 }
 
 const result =  performApiLogic();
+console.log("Worker Result: ", result);
 parentPort.postMessage(result);
 
 // parentPort.on("message", async (message) => {
