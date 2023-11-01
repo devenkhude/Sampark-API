@@ -22,9 +22,9 @@ module.exports = {
  * To get all department subjects
  * @returns department wise subjects list
  * */
-async function getAllWithDepartments() {
+function getAllWithDepartments() {
   if (isMainThread) {
-    const worker = new Worker('./subjectmaster.worker.js', { workerData: { api: 'getAllWithDepartments' } });
+    const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
 
     worker.on('message', (result) => {
       return result;
