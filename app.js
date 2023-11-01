@@ -11,11 +11,6 @@ const deviceHandler = require("./_helpers/device");
 const errorHandler = require("./_helpers/error-handler");
 const commonMethod = require('./_helpers/commonmethods');
 
-const os = require('os');
-const numCPUs = os.cpus().length;
-
-console.log("Number of CPU's: ", numCPUs);
-
 app.use(compression());
 app.use(fileUpload());
 app.use(bodyParser.json());
