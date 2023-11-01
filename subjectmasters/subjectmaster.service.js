@@ -1,4 +1,5 @@
 ﻿const { Worker, isMainThread, parentPort } = require('worker_threads');
+const path = require('path');
 const config = require("../config.json");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -25,7 +26,7 @@ module.exports = {
 function getAllWithDepartments() {
   return new Promise((resolve, reject) => {
     if (isMainThread) {
-      const worker = new Worker(require('./worker'), { workerData: { api: 'getAllWithDepartments' } });
+      const worker = new Worker(path.resolve(__dirname, 'worker.js'), { workerData: { api: 'getAllWithDepartments' } });
 
       worker.on('message', (result) => {
         console.log("Service Result: ", JSON.parse(result));
