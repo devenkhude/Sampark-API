@@ -25,7 +25,7 @@ module.exports = {
 function getAllWithDepartments() {
   return new Promise((resolve, reject) => {
     if (isMainThread) {
-      const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
+      const worker = new Worker(require('./worker'), { workerData: { api: 'getAllWithDepartments' } });
 
       worker.on('message', (result) => {
         console.log("Service Result: ", result);
