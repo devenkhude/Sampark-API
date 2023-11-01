@@ -87,13 +87,20 @@ async function performApiLogic() {
   }
 }
 
-parentPort.on("message", async (message) => {
-  if (message.api === "getAllWithDepartments") {
-    // Implement logic for API 1
-    console.log("Worker Message: ", message);
-    const result = await performApiLogic();
-    console.log("Worker Result: ", result);
-    parentPort.postMessage(result);
-  }
-  // Add more conditions for other APIs if needed
+performApiLogic().then((data) => {
+  console.log("Worker Thread Success: ", data);
+  parentPort.postMessage(data);
+}).catch((err) => {
+  console.log("Worker Thread: ", err);
 });
+
+// parentPort.on("message", async (message) => {
+//   if (message.api === "getAllWithDepartments") {
+//     // Implement logic for API 1
+//     console.log("Worker Message: ", message);
+//     const result = await performApiLogic();
+//     console.log("Worker Result: ", result);
+//     parentPort.postMessage(result);
+//   }
+//   // Add more conditions for other APIs if needed
+// });
