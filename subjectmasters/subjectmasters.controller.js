@@ -1,4 +1,5 @@
-﻿const express = require("express");
+﻿const { Worker, isMainThread, parentPort } = require('worker_threads');
+const express = require("express");
 const router = express.Router();
 const subjectmasterService = require("./subjectmaster.service");
 
@@ -19,10 +20,17 @@ function create(req, res, next) {
 }
 
 function getAllWithDepartments(req, res, next) {
-  subjectmasterService
-    .getAllWithDepartments()
-    .then((subjectmasters) => res.json(subjectmasters))
-    .catch((err) => next(err));
+  if (isMainThread) {
+    const worker = new Worker('./worker.js', { workerData: { api: 'getAllWithDepartments' } });
+
+    worker.on('message', (result) => {
+      res.json(result);
+    });
+  }
+  // subjectmasterService
+  //   .getAllWithDepartments()
+  //   .then((subjectmasters) => res.json(subjectmasters))
+  //   .catch((err) => next(err));
 }
 
 function getAll(req, res, next) {
