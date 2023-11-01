@@ -28,8 +28,8 @@ function getAllWithDepartments() {
       const worker = new Worker(require('./worker'), { workerData: { api: 'getAllWithDepartments' } });
 
       worker.on('message', (result) => {
-        console.log("Service Result: ", result);
-        resolve(result); // Resolve the promise with the result from the worker
+        console.log("Service Result: ", JSON.parse(result));
+        resolve(JSON.parse(result)); // Resolve the promise with the result from the worker
       });
 
       worker.on('error', (error) => {
