@@ -86,15 +86,23 @@ async function performApiLogic() {
   }
 }
 
-parentPort.on("message", async (message) => {
-  if (message.api === "getAllWithDepartments") {
-    try {
-      const result = await performApiLogic();
-      console.log("Worker Result: ", result);
-      parentPort.postMessage(result);
-    } catch (error) {
-      console.error("Worker Error: ", error);
-      parentPort.postMessage({ error: error.message });
-    }
-  }
-});
+performApiLogic().then((data) => {
+  console.log("Worker Result: ", data);
+  parentPort.postMessage(JSON.stringify(data));
+}).catch((err)=> {
+  console.error("Worker Error: ", err);
+  parentPort.postMessage({ error: err.message });
+})
+
+// parentPort.on("message", async (message) => {
+//   if (message.api === "getAllWithDepartments") {
+//     try {
+//       const result = await performApiLogic();
+//       console.log("Worker Result: ", result);
+//       parentPort.postMessage(result);
+//     } catch (error) {
+//       console.error("Worker Error: ", error);
+//       parentPort.postMessage({ error: error.message });
+//     }
+//   }
+// });
