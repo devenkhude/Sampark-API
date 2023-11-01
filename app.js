@@ -38,6 +38,16 @@ require("./users/notifications.js")(app);
 require("./broadcast_messages/broadcastmessages.js")(app);
 require("./apis/apis.js")(app);
 
+app.get('/subjects/withdepartments', (req, res) => {
+  if (isMainThread) {
+    const worker = new Worker(require('./subjectmasters/worker'), { workerData: { api: 'getAllWithDepartments' } });
+
+    worker.on('message', (result) => {
+      res.json(result);
+    })
+  }
+});
+
 app.use("/whatsapp", require("./whatsapp/api.controller"));
 app.use("/videostories", require("./videostories/videostories.controller"));
 app.use("/reports", require("./reports/reports.controller"));
@@ -49,7 +59,7 @@ app.use("/videos", require("./videos/videos.controller"));
 app.use("/streams", require("./streams/streams.controller"));
 app.use("/videolikes", require("./videos/videolikes.controller"));
 app.use("/departments", require("./departmentmasters/departmentmasters.controller"));
-app.use("/subjects", require("./subjectmasters/subjectmasters.controller"));
+// app.use("/subjects", require("./subjectmasters/subjectmasters.controller"));
 app.use("/concepts", require("./conceptmasters/conceptmasters.controller"));
 app.use("/documents", require("./documents/documents.controller"));
 app.use("/scert_solutions", require("./scert_solutions/scertsolutions.controller"));
