@@ -19,11 +19,13 @@ function create(req, res, next) {
     .catch((err) => next(err));
 }
 
-function getAllWithDepartments(req, res, next) {
-  subjectmasterService
-    .getAllWithDepartments()
-    .then((subjectmasters) => res.json(subjectmasters))
-    .catch((err) => next(err));
+async function getAllWithDepartments(req, res, next) {
+  const subjectmasters = await subjectmasterService.getAllWithDepartments();
+  res.json(subjectmasters);
+  // subjectmasterService
+  //   .getAllWithDepartments()
+  //   .then((subjectmasters) => res.json(subjectmasters))
+  //   .catch((err) => next(err));
 }
 
 function getAll(req, res, next) {
