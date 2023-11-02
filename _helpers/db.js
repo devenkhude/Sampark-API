@@ -6,7 +6,8 @@ mongoose.connect(process.env.MONGODB_URI || config.connectionString, {
   useUnifiedTopology: true,
   useFindAndModify: false,
   useCreateIndex: true,
-  poolSize: 25,
+  maxPoolSize: 50,
+  minPoolSize: 5,
 });
 
 const db = mongoose.connection;
