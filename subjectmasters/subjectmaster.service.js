@@ -89,7 +89,7 @@ async function getAllWithDepartments() {
   try {
     let subjectMasters = [];
     let departmentMasters = [];
-    const keys = ["AllSubjectMasters", "AllDepartmentMasters"];
+    const keys = ["AllSubjectMaster", "AllDepartmentMaster"];
     redis.mget(keys, async (err, values) => {
       if (values[0].length || values[1].length) {
         console.log("Inside if statement");
@@ -107,8 +107,8 @@ async function getAllWithDepartments() {
         departmentMasters = await Departmentmaster.find()
           .sort({ sort_order: 1 })
           .select("id name subjects");
-        redis.set("AllSubjectMasters", JSON.stringify(values[0]));
-        redis.set("AllDepartmentMasters", JSON.stringify(values[1]));
+        redis.set("AllSubjectMaster", JSON.stringify(values[0]));
+        redis.set("AllDepartmentMaster", JSON.stringify(values[1]));
         const finalData = processWithDepartments(subjectMasters, departmentMasters);
         return finalData;
       }
