@@ -18,6 +18,8 @@ module.exports = {
   delete: _delete,
 };
 
+
+
 /**
  * To get all department subjects
  * @returns department wise subjects list
@@ -26,8 +28,13 @@ async function getAllWithDepartments() {
   try {
     let subjectMasters = [];
     let departmentMasters = [];
+    const keys = ['AllSubjectMasters', 'AllDepartmentMasters'];
+    redis.mget(keys, (err, values) => {
+      console.log("Value 0", values[0]);
+    });
+
+
     redis.get("AllSubjectMasters", async (err, value) => {
-      console.log("Subject Masters: ", value);
       if (value) {
         subjectMasters = JSON.parse(value);
       } else {
@@ -40,7 +47,6 @@ async function getAllWithDepartments() {
       }
     });
     redis.get("AllDepartmentMasters", async (err, value) => {
-      console.log("Department Masters: ", value);
       if (value) {
         departmentMasters = JSON.parse(value);
       } else {
