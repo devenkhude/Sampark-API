@@ -92,11 +92,13 @@ async function getAllWithDepartments() {
     const keys = ["AllSubjectMasters", "AllDepartmentMasters"];
     redis.mget(keys, async (err, values) => {
       if (values[0].length || values[1].length) {
+        console.log("Inside if statement");
         subjectMasters = JSON.parse(values[0]);
         departmentMasters = JSON.parse(values[1]);
         const finalData = processWithDepartments(subjectMasters, departmentMasters);
         return finalData;
       } else {
+        console.log("Inside else statement");
         subjectMasters = await Subjectmaster.find()
           .sort({ sort_order: 1 })
           .select(
