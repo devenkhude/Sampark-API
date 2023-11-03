@@ -27,6 +27,7 @@ async function getAllWithDepartments() {
     let subjectMasters = [];
     let departmentMasters = [];
     redis.get("AllSubjectMasters", async (err, value) => {
+      console.log("Subject Masters: ", value);
       if (value) {
         subjectMasters = JSON.parse(value);
       } else {
@@ -39,6 +40,7 @@ async function getAllWithDepartments() {
       }
     });
     redis.get("AllDepartmentMasters", async (err, value) => {
+      console.log("Department Masters: ", value);
       if (value) {
         departmentMasters = JSON.parse(value);
       } else {
