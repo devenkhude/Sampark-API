@@ -24,8 +24,8 @@ module.exports = {
  * */
 async function getAllWithDepartments() {
   try {
-    let subjectMasters = null;
-    let departmentMasters = null;
+    let subjectMasters = [];
+    let departmentMasters = [];
     redis.get("AllSubjectMasters", async (err, value) => {
       if (value) {
         subjectMasters = JSON.parse(value);
