@@ -27,25 +27,25 @@ async function getAllWithDepartments() {
     let subjectMasters = null;
     let departmentMasters = null;
     redis.get("AllSubjectMasters", async (err, value) => {
-      if (err) {
+      if (value) {
+        subjectMasters = JSON.parse(value);
+      } else {
         subjectMasters = await Subjectmaster.find()
           .sort({ sort_order: 1 })
           .select(
             "id name icon activeicon module is_default registration_name for_registration"
           );
         redis.set("AllSubjectMasters", JSON.stringify(subjectMasters));
-      } else {
-        subjectMasters = JSON.parse(value);
       }
     });
     redis.get("AllDepartmentMasters", async (err, value) => {
-      if (err) {
+      if (value) {
+        departmentMasters = JSON.parse(value);
+      } else {
         departmentMasters = await Departmentmaster.find()
           .sort({ sort_order: 1 })
           .select("id name subjects");
         redis.set("AllDepartmentMasters", JSON.stringify(departmentMasters));
-      } else {
-        departmentMasters = JSON.parse(value);
       }
     });
     // Fetch subject and department data with selective projection
