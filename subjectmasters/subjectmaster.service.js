@@ -1,6 +1,4 @@
-﻿const { Worker, isMainThread, parentPort } = require('worker_threads');
-const path = require('path');
-const config = require("../config.json");
+﻿const config = require("../config.json");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const db = require("../_helpers/db");
@@ -24,25 +22,6 @@ module.exports = {
  * @returns department wise subjects list
  * */
 async function getAllWithDepartments() {
-  // return new Promise((resolve, reject) => {
-  //   if (isMainThread) {
-  //     const worker = new Worker(path.resolve(__dirname, 'worker.js'));
-  //     worker.postMessage({ api: 'getAllWithDepartments' });
-
-  //     worker.on('message', (result) => {
-  //       resolve(JSON.parse(result)); // Resolve the promise with the result from the worker
-  //     });
-
-  //     worker.on('error', (error) => {
-  //       console.log("Service Error: ", error);
-  //       reject(error); // Reject the promise if there's an error in the worker
-  //     });
-  //   } else {
-  //     console.log("Service Else Block: ");
-  //     // This is the worker thread; perform the task here
-  //   }
-  // });
-
   try {
     // Fetch subject and department data with selective projection
     const [subjectMasters, departmentMasters] = await Promise.all([

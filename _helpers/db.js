@@ -6,8 +6,6 @@ mongoose.connect(process.env.MONGODB_URI || config.connectionString, {
   useUnifiedTopology: true,
   useFindAndModify: false,
   useCreateIndex: true,
-  maxPoolSize: 50,
-  minPoolSize: 5,
 });
 
 const db = mongoose.connection;
@@ -44,7 +42,6 @@ process.on('SIGINT', () => {
 // module.exports = db;
 
 module.exports = {
-  db: db,
   User: require('../_models/user.model'),
   Userimage: require('../_models/userimage.model'),
   Uservideo: require('../_models/uservideo.model'),
