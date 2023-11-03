@@ -2,6 +2,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const db = require("../_helpers/db");
+const redis = require("../_helpers/redis");
 const commonmethods = require("../_helpers/commonmethods");
 const get_current_user = commonmethods.get_current_user;
 const Subjectmaster = db.Subjectmaster;
@@ -23,17 +24,41 @@ module.exports = {
  * */
 async function getAllWithDepartments() {
   try {
+    let subjectMasters = null;
+    let departmentMasters = null;
+    redis.get("AllSubjectMasters", async (err, value) => {
+      if (err) {
+        subjectMasters = await Subjectmaster.find()
+          .sort({ sort_order: 1 })
+          .select(
+            "id name icon activeicon module is_default registration_name for_registration"
+          );
+        redis.set("AllSubjectMasters", JSON.stringify(subjectMasters));
+      } else {
+        subjectMasters = JSON.parse(value);
+      }
+    });
+    redis.get("AllDepartmentMasters", async (err, value) => {
+      if (err) {
+        departmentMasters = await Departmentmaster.find()
+          .sort({ sort_order: 1 })
+          .select("id name subjects");
+        redis.set("AllDepartmentMasters", JSON.stringify(departmentMasters));
+      } else {
+        departmentMasters = JSON.parse(value);
+      }
+    });
     // Fetch subject and department data with selective projection
-    const [subjectMasters, departmentMasters] = await Promise.all([
-      Subjectmaster.find()
-        .sort({ sort_order: 1 })
-        .select(
-          "id name icon activeicon module is_default registration_name for_registration"
-        ),
-      Departmentmaster.find()
-        .sort({ sort_order: 1 })
-        .select("id name subjects"),
-    ]);
+    // const [subjectMasters, departmentMasters] = await Promise.all([
+    //   Subjectmaster.find()
+    //     .sort({ sort_order: 1 })
+    //     .select(
+    //       "id name icon activeicon module is_default registration_name for_registration"
+    //     ),
+    //   Departmentmaster.find()
+    //     .sort({ sort_order: 1 })
+    //     .select("id name subjects"),
+    // ]);
 
     if (!subjectMasters.length || !departmentMasters.length) {
       throw new Error("No data found.");
