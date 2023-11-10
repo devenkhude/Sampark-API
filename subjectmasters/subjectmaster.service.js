@@ -2,7 +2,6 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const db = require("../_helpers/db");
-const redis = require("../_helpers/redis");
 const commonmethods = require("../_helpers/commonmethods");
 const get_current_user = commonmethods.get_current_user;
 const Subjectmaster = db.Subjectmaster;
