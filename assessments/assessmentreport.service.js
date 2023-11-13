@@ -38,7 +38,7 @@ async function getClassStudentRport(req) {
   
     const dbDepartment = await Departmentmaster.findById(classId);
   
-    const dbStudents = await Student.find({ department: classId, diseCode, isActive: true });
+    const dbStudents = await Student.find({ department: classId, diseCode: disecode, isActive: true });
   
     const arrStudentIds = dbStudents.map(element => new objectId(element.id));
   
