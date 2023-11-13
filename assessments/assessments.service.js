@@ -839,190 +839,91 @@ This API is to get questions by assessment ids
 */
 async function getQuestions(userParam) {
   try {
-    //Get comma separated by assessments
-    var assessmentIds = userParam.assessmentIds;
-    //var classId = userParam.classId;
-    var assessType = userParam.type;
-    //Split them into array
-    var arrAssessmentIds = assessmentIds.split(",");
-    let query = {};
-    let finalArray = [];
-    //To get active assessments based on class id
-    query["isActive"] = true;
-    query["assessment"] = { $in: arrAssessmentIds };
-
-    var assessmentQuestions = await AssessmentQuestion.find(query);
-
-    let queryAssess = {};
-    //To get active assessments based on class id
-    queryAssess["isActive"] = true;
-    queryAssess["department"] = userParam.classId;
-
+    const assessmentIds = userParam.assessmentIds.split(",");
+    const arrAssessmentIds = assessmentIds.map(id => id.trim());
+  
+    const query = {
+      isActive: true,
+      assessment: { $in: arrAssessmentIds }
+    };
+  
+    const assessmentQuestions = await AssessmentQuestion.find(query);
+  
+    const queryAssess = {
+      isActive: true,
+      department: userParam.classId
+    };
+  
     const Assessments = await Assessment.find(queryAssess);
-
-    //To do groupby on department of assessments received
-    var questionsGroupByAssessment = _.groupBy(
-      assessmentQuestions,
-      "assessment"
-    );
-
-    //Loop through objects
-    for (var assessId in questionsGroupByAssessment) {
-      let questionList = {};
-
-      //Assigning required class info to a final object
-      questionList["id"] = assessId;
-
-      //To get assessment details
-      var assessmentName = _.where(Assessments, { id: assessId });
-
-      if (assessmentName && assessmentName[0]) {
-        questionList["name"] = assessmentName[0]["lesson"];
-        questionList["level"] = assessmentName[0]["level"];
-        var level = assessmentName[0]["level"];
-        questionList["timeLimit"] = assessmentName[0]["duration"];
-
-        requiredCnt =
-          questionsGroupByAssessment[assessId].length >= 21
-            ? 21
-            : questionsGroupByAssessment[assessId].length;
-        questionList["displayQuestionsCnt"] = requiredCnt - 1;
-
-        questionList["instructions"] = [];
-
-        var instruction1 =
-          "You will get total " +
-          assessmentName[0]["duration"] +
-          " minutes to finish the test;" +
-          " if you finish in " +
-          level["Difficult"] +
-          " minutes (Difficult), you will get 3 stars, in " +
-          level["Moderate"] +
-          " mins (Moderate) you  will get 2 stars and above " +
-          level["Easy"] +
-          " mins you will get 1 star";
-
-        var instruction2 =
-          "For each assessment you will get 3 lifelines from Sampark Didi to help you in the " +
-          "test, if you don’t use the lifelines you will get 1 star";
-
-        questionList["instructions"].push(instruction1);
-        questionList["instructions"].push(instruction2);
-
-        //Array of questions
-        let questionArr = [];
-
-        for (var assessIndex in questionsGroupByAssessment[assessId]) {
-          var questionInnerObj =
-            questionsGroupByAssessment[assessId][assessIndex];
-
-          //Each question as an object
-          let questionObj = {};
-
-          questionObj["id"] = questionInnerObj["id"];
-          questionObj["question"] = questionInnerObj["question"];
-          questionObj["sentence"] = questionInnerObj["sentence"]
-            ? questionInnerObj["sentence"]
-            : "";
-          questionObj["questionType"] = questionInnerObj["questionType"]
-            ? questionInnerObj["questionType"]
-            : "objective";
-          questionObj["optionType"] = questionInnerObj["optionType"]
-            ? questionInnerObj["optionType"]
-            : "";
-          questionObj["isAudioEnabled"] = questionInnerObj["isAudioEnabled"]
-            ? questionInnerObj["isAudioEnabled"]
-            : "";
-
-          if (questionObj["questionType"] == "ml-b") {
-            let optionKeys = Object.keys(questionInnerObj["options"]);
-            let optionValues = Object.values(questionInnerObj["options"]);
-            await shuffle(optionValues);
-            let newOptions = {};
-            for (let i = 0; i < optionKeys.length; i++) {
-              newOptions[optionKeys[i]] = optionValues[i];
-            }
-            questionObj["options"] = newOptions;
-          } else {
-            questionObj["options"] = questionInnerObj["options"];
+  
+    const questionsGroupByAssessment = _.groupBy(assessmentQuestions, "assessment");
+  
+    const finalArray = [];
+  
+    for (const assessId in questionsGroupByAssessment) {
+      const questionList = {};
+      questionList.id = assessId;
+  
+      const assessmentName = _.find(Assessments, { id: assessId });
+  
+      if (assessmentName) {
+        questionList.name = assessmentName.lesson;
+        questionList.level = assessmentName.level;
+        questionList.timeLimit = assessmentName.duration;
+  
+        const level = assessmentName.level;
+  
+        const requiredCnt = Math.min(questionsGroupByAssessment[assessId].length, 21);
+        questionList.displayQuestionsCnt = requiredCnt - 1;
+  
+        questionList.instructions = [
+          `You will get total ${assessmentName.duration} minutes to finish the test; if you finish in ${level.Difficult} minutes (Difficult), you will get 3 stars, in ${level.Moderate} mins (Moderate) you will get 2 stars and above ${level.Easy} mins you will get 1 star`,
+          "For each assessment, you will get 3 lifelines from Sampark Didi to help you in the test; if you don’t use the lifelines you will get 1 star"
+        ];
+  
+        const questionArr = [];
+  
+        for (const questionInnerObj of questionsGroupByAssessment[assessId]) {
+          const questionObj = {
+            id: questionInnerObj.id,
+            question: questionInnerObj.question,
+            sentence: questionInnerObj.sentence || "",
+            questionType: questionInnerObj.questionType || "objective",
+            optionType: questionInnerObj.optionType || "",
+            isAudioEnabled: questionInnerObj.isAudioEnabled || "",
+            options: questionInnerObj.options,
+            question_image: questionInnerObj.question_image
+              ? config.repositoryHost + questionInnerObj.question_image
+              : "",
+            options_image: _.mapValues(questionInnerObj.options_image || {}, img =>
+              img ? config.repositoryHost + img : ""
+            ),
+            correctAnswer: questionInnerObj.correctAnswer
+          };
+  
+          if (questionObj.questionType === "ml-b") {
+            const optionValues = _.shuffle(Object.values(questionInnerObj.options));
+            const newOptions = _.zipObject(Object.keys(questionInnerObj.options), optionValues);
+            questionObj.options = newOptions;
           }
-
-          questionObj["question_image"] = questionInnerObj["question_image"]
-            ? config.repositoryHost + questionInnerObj["question_image"]
-            : "";
-
-          if (!_.isEmpty(questionInnerObj["options_image"])) {
-            questionInnerObj["options_image"]["a"]
-              ? (questionInnerObj["options_image"]["a"] =
-                  config.repositoryHost +
-                  questionInnerObj["options_image"]["a"])
-              : "";
-            questionInnerObj["options_image"]["b"]
-              ? (questionInnerObj["options_image"]["b"] =
-                  config.repositoryHost +
-                  questionInnerObj["options_image"]["b"])
-              : "";
-            questionInnerObj["options_image"]["c"]
-              ? (questionInnerObj["options_image"]["c"] =
-                  config.repositoryHost +
-                  questionInnerObj["options_image"]["c"])
-              : "";
-            questionInnerObj["options_image"]["d"]
-              ? (questionInnerObj["options_image"]["d"] =
-                  config.repositoryHost +
-                  questionInnerObj["options_image"]["d"])
-              : "";
-            questionObj["options_image"] = questionInnerObj["options_image"];
-          } else {
-            questionObj["options_image"] = {};
-          }
-
-          questionOptions = {};
-          Object.keys(questionObj["options"]).forEach(function (option) {
-            if (questionObj["options"][option] == "") {
-              questionOptions[option] = option;
-            } else {
-              questionOptions[option] = questionObj["options"][option];
-            }
-          });
-          questionObj["options"] = questionOptions;
-          let correctAnswerKeys = Object.keys(
-            questionInnerObj["correctAnswer"]
-          );
-          let correctAnswerKey = correctAnswerKeys[0];
-
-          if (questionInnerObj["correctAnswer"][correctAnswerKey] == "") {
-            questionInnerObj["correctAnswer"][correctAnswerKey] =
-              correctAnswerKey;
-          }
-          questionObj["correctAnswer"] = questionInnerObj["correctAnswer"];
-
-          //Push each object to an array
+  
           questionArr.push(questionObj);
-
-          //Push all assessments to final object
-          questionList["questions"] = questionArr;
         }
-
-        //To send only displayQuestionsCnt number of questions
-        if (assessType === "PT") {
-          var newQuestionArr = questionArr.slice(
-            0,
-            questionList["displayQuestionsCnt"]
-          );
-          questionList["questions"] = newQuestionArr;
+  
+        if (userParam.type === "PT") {
+          questionList.questions = questionArr.slice(0, questionList.displayQuestionsCnt);
+        } else {
+          questionList.questions = questionArr;
         }
-
-        //Assign final object to an array
+  
         finalArray.push(questionList);
       }
     }
-
-    //return final array
+  
     return finalArray;
   } catch (e) {
-    console.log(e);
-  }
+    console.error(e);
+  }  
 }
 
 async function shuffle(array) {
@@ -1465,291 +1366,165 @@ This API is to get students wise reward details
 */
 async function getRewardDetails(userParam) {
   try {
-    let response = {};
     const userId = userParam.user;
-    if (userId == null || userId == undefined) throw new Error("Invalid input");
-
-    let rewardList = await Reward.find({
-      user: userId,
-      isActive: true,
-    }).populate("videoStory");
-
-    if (rewardList.length > 0) {
-      rewardList.forEach((item) => {
-        if (item["videoStory"] != null)
-          item["videoStory"]["thumbnail"] =
-            config.repositoryHost + item["videoStory"]["thumbnail"];
-      });
+  
+    if (!userId) {
+      throw new Error("Invalid input");
     }
-
-    let userPoints = await User.findById(userId).select("totalPointsEarned");
-
-    response["rewards"] = rewardList;
-    if (userPoints)
-      response["totalPointsEarned"] = userPoints["totalPointsEarned"];
-    else response["totalPointsEarned"] = 0;
-    response["status"] = true;
-    response["statusCode"] = 200;
-
-    return response;
+  
+    const rewardList = await Reward.find({ user: userId, isActive: true }).populate("videoStory");
+  
+    rewardList.forEach(item => {
+      if (item.videoStory) {
+        item.videoStory.thumbnail = config.repositoryHost + item.videoStory.thumbnail;
+      }
+    });
+  
+    const userPoints = await User.findById(userId).select("totalPointsEarned");
+    const totalPointsEarned = userPoints ? userPoints.totalPointsEarned : 0;
+  
+    return {
+      rewards: rewardList,
+      totalPointsEarned,
+      status: true,
+      statusCode: 200
+    };
   } catch (error) {
-    console.log(error);
     throw error;
-  }
+  }  
 }
 
 /*
 This API is to get Sampark Smart Shala assessment
 */
 async function getSSSAssessment(userparam) {
-  let defer = require("q").defer();
   try {
-    if (
-      userparam.assessmentId == undefined ||
-      userparam.assessmentId == null ||
-      userparam.assessmentId == ""
-    )
-      throw "Invalid input";
-    //Split them into array
-    let arrAssessmentIds = [userparam.assessmentId];
-
-    let query = {};
-    let finalArray = [];
-
-    //To get active assessments based on class id
-    query["isActive"] = true;
-
-    query["assessment"] = { $in: arrAssessmentIds };
-
-    const assessmentQuestions = await AssessmentQuestion.find(query);
-
-    let queryAssess = {};
-
-    //To get active assessments based on class id
-    queryAssess["isActive"] = true;
-
-    const Assessments = await Assessment.find(queryAssess);
-
-    //To do groupby on department of assessments received
-    let questionsGroupByAssessment = _.groupBy(
-      assessmentQuestions,
-      "assessment"
-    );
-    //Loop through objects
-    for (const assessId in questionsGroupByAssessment) {
-      let questionList = {};
-
-      //Assigning required class info to a final object
-      questionList["id"] = assessId;
-
-      //To get assessment details
-      let assessmentName = _.where(Assessments, { id: assessId });
-
-      questionList["name"] = assessmentName[0]["lesson"];
-      questionList["level"] = assessmentName[0]["level"];
-      let level = assessmentName[0]["level"];
-      questionList["timeLimit"] = assessmentName[0]["duration"];
-
-      requiredCnt =
-        questionsGroupByAssessment[assessId].length >= 21
-          ? 21
-          : questionsGroupByAssessment[assessId].length;
-      questionList["displayQuestionsCnt"] = requiredCnt - 1;
-
-      questionList["instructions"] = {};
-      questionList["instructions"]["rules"] = [];
-      questionList["instructions"]["point_system"] = [];
-
-      let maxMarks = assessmentName[0]["maxMarks"]
-        ? assessmentName[0]["maxMarks"]
-        : assessmentName[0]["displayQuestionsCnt"];
-      let perQuestionPoint = (
-        parseFloat(maxMarks) / parseFloat(questionList["displayQuestionsCnt"])
-      ).toFixed(1);
-      let rule1 =
-        "You have to score over 80% to complete this module successfully.";
-      let rule2 = "You will get 3 Lifelines.";
-      let rule3 =
-        "Maximum time taken should be " +
-        assessmentName[0]["duration"] +
-        " minutes.";
-      let point1 = "+" + perQuestionPoint + " for each correct answer.";
-      let point2 = "Each unused Lifelines earn you  5 points.";
-      let point3 =
-        "If you complete the quiz within stipulated time, you  earn 5 points.";
-
-      questionList["instructions"]["rules"].push(rule1);
-      questionList["instructions"]["rules"].push(rule2);
-      questionList["instructions"]["rules"].push(rule3);
-      questionList["instructions"]["point_system"].push(point1);
-      questionList["instructions"]["point_system"].push(point2);
-      questionList["instructions"]["point_system"].push(point3);
-
-      //Array of questions
-      let questionArr = [];
-
-      for (const assessIndex in questionsGroupByAssessment[assessId]) {
-        let questionInnerObj =
-          questionsGroupByAssessment[assessId][assessIndex];
-
-        //Each question as an object
-        let questionObj = {};
-
-        questionObj["id"] = questionInnerObj["id"];
-        questionObj["question"] = questionInnerObj["question"];
-        questionObj["sentence"] = questionInnerObj["sentence"]
-          ? questionInnerObj["sentence"]
-          : "";
-        questionObj["questionType"] = questionInnerObj["questionType"]
-          ? questionInnerObj["questionType"]
-          : "objective";
-        questionObj["optionType"] = questionInnerObj["optionType"]
-          ? questionInnerObj["optionType"]
-          : "";
-        questionObj["isAudioEnabled"] = questionInnerObj["isAudioEnabled"]
-          ? questionInnerObj["isAudioEnabled"]
-          : "";
-        if (
-          questionInnerObj["questionType"] == "fbtt" ||
-          questionInnerObj["questionType"] == "dd1"
-        ) {
-          if (questionInnerObj["options"]) {
-            let options = Object.values(questionInnerObj["options"]);
-            let correctAnswers = Object.values(
-              questionInnerObj["correctAnswer"]
-            );
-            let finalOptions = options.concat(correctAnswers);
-            finalOptions = finalOptions.filter(function (elem, pos) {
-              return finalOptions.indexOf(elem) == pos;
-            });
-            let questionOptions = {};
-            for (var i = 0; i < finalOptions.length; i++) {
-              questionOptions[i] = finalOptions[i];
-            }
-            questionObj["options"] = questionOptions;
-          } else {
-            let finalOptions = Object.values(questionInnerObj["correctAnswer"]);
-            finalOptions = finalOptions.filter(function (elem, pos) {
-              return finalOptions.indexOf(elem) == pos;
-            });
-            let questionOptions = {};
-            for (var i = 0; i < finalOptions.length; i++) {
-              questionOptions[i] = finalOptions[i];
-            }
-            questionObj["options"] = questionOptions;
-          }
-        } else if (
-          questionInnerObj["questionType"] == "dd2" &&
-          questionInnerObj["optionType"] == "text"
-        ) {
-          keys = Object.keys(questionInnerObj["options"]);
-          questionInnerObj["options"][keys[0]] = JSON.parse(
-            questionInnerObj["options"][keys[0]]
-          );
-          questionInnerObj["options"][keys[1]] = JSON.parse(
-            questionInnerObj["options"][keys[1]]
-          );
-
-          keys = Object.keys(questionInnerObj["correctAnswer"]);
-          questionInnerObj["correctAnswer"][keys[0]] = JSON.parse(
-            questionInnerObj["correctAnswer"][keys[0]]
-          );
-          questionInnerObj["correctAnswer"][keys[1]] = JSON.parse(
-            questionInnerObj["correctAnswer"][keys[1]]
-          );
-          questionObj["options"] = questionInnerObj["options"];
-        } else if (
-          questionInnerObj["questionType"] == "dd2" &&
-          questionInnerObj["optionType"] == "image"
-        ) {
-          keys = Object.keys(questionInnerObj["options"]);
-          let values_0 = Object.values(questionInnerObj["options"][keys[0]]);
-          let values_1 = Object.values(questionInnerObj["options"][keys[1]]);
-          for (let v in values_0) {
-            values_0[v] = config.repositoryHost + values_0[v];
-          }
-          for (let v in values_1) {
-            values_1[v] = config.repositoryHost + values_1[v];
-          }
-          questionInnerObj["options"][keys[0]] = values_0;
-          questionInnerObj["options"][keys[1]] = values_1;
-
-          keys = Object.keys(questionInnerObj["correctAnswer"]);
-          values_0 = Object.values(questionInnerObj["correctAnswer"][keys[0]]);
-          values_1 = Object.values(questionInnerObj["correctAnswer"][keys[1]]);
-          for (let v in values_0) {
-            values_0[v] = config.repositoryHost + values_0[v];
-          }
-          for (let v in values_1) {
-            values_1[v] = config.repositoryHost + values_1[v];
-          }
-          questionInnerObj["correctAnswer"][keys[0]] = values_0;
-          questionInnerObj["correctAnswer"][keys[1]] = values_1;
-          questionObj["options"] = questionInnerObj["options"];
-        } else {
-          questionObj["options"] = questionInnerObj["options"];
-        }
-        questionObj["question_image"] = questionInnerObj["question_image"]
-          ? config.repositoryHost + questionInnerObj["question_image"]
-          : "";
-
-        if (!_.isEmpty(questionInnerObj["options_image"])) {
-          questionInnerObj["options_image"]["a"]
-            ? (questionInnerObj["options_image"]["a"] =
-                config.repositoryHost + questionInnerObj["options_image"]["a"])
-            : "";
-          questionInnerObj["options_image"]["b"]
-            ? (questionInnerObj["options_image"]["b"] =
-                config.repositoryHost + questionInnerObj["options_image"]["b"])
-            : "";
-          questionInnerObj["options_image"]["c"]
-            ? (questionInnerObj["options_image"]["c"] =
-                config.repositoryHost + questionInnerObj["options_image"]["c"])
-            : "";
-          questionInnerObj["options_image"]["d"]
-            ? (questionInnerObj["options_image"]["d"] =
-                config.repositoryHost + questionInnerObj["options_image"]["d"])
-            : "";
-          questionObj["options_image"] = questionInnerObj["options_image"];
-        } else {
-          questionObj["options_image"] = {};
-        }
-
-        questionOptions = {};
-        Object.keys(questionObj["options"]).forEach(function (option) {
-          if (questionObj["options"][option] == "") {
-            questionOptions[option] = option;
-          } else {
-            questionOptions[option] = questionObj["options"][option];
-          }
-        });
-        questionObj["options"] = questionOptions;
-        let correctAnswerKeys = Object.keys(questionInnerObj["correctAnswer"]);
-        let correctAnswerKey = correctAnswerKeys[0];
-
-        if (questionInnerObj["correctAnswer"][correctAnswerKey] == "") {
-          questionInnerObj["correctAnswer"][correctAnswerKey] =
-            correctAnswerKey;
-        }
-        questionObj["correctAnswer"] = questionInnerObj["correctAnswer"];
-
-        //Push each object to an array
-        questionArr.push(questionObj);
-
-        //Push all assessments to final object
-        questionList["questions"] = questionArr;
-      }
-
-      //Assign final object to an array
-      finalArray.push(questionList);
+    if (!userparam.assessmentId) {
+      throw new Error("Invalid input");
     }
-
-    defer.resolve(finalArray);
+  
+    const arrAssessmentIds = [userparam.assessmentId];
+    const query = {
+      isActive: true,
+      assessment: { $in: arrAssessmentIds }
+    };
+  
+    const assessmentQuestions = await AssessmentQuestion.find(query);
+    const Assessments = await Assessment.find({ isActive: true });
+    const questionsGroupByAssessment = _.groupBy(assessmentQuestions, "assessment");
+  
+    const finalArray = Object.entries(questionsGroupByAssessment).map(([assessId, questionsGroup]) => {
+      const assessmentName = Assessments.find(assessment => assessment.id === assessId);
+  
+      const questionList = {
+        id: assessId,
+        name: assessmentName.lesson,
+        level: assessmentName.level,
+        timeLimit: assessmentName.duration,
+        displayQuestionsCnt: Math.min(questionsGroup.length, 21) - 1,
+        instructions: {
+          rules: [
+            "You have to score over 80% to complete this module successfully.",
+            "You will get 3 Lifelines.",
+            `Maximum time taken should be ${assessmentName.duration} minutes.`
+          ],
+          point_system: [
+            `+${(assessmentName.maxMarks || assessmentName.displayQuestionsCnt) / questionList.displayQuestionsCnt.toFixed(1)} for each correct answer.`,
+            "Each unused Lifelines earn you 5 points.",
+            "If you complete the quiz within stipulated time, you earn 5 points."
+          ]
+        },
+        questions: questionsGroup.slice(0, questionList.displayQuestionsCnt).map(questionInnerObj => {
+          const questionObj = {
+            id: questionInnerObj.id,
+            question: questionInnerObj.question,
+            sentence: questionInnerObj.sentence || "",
+            questionType: questionInnerObj.questionType || "objective",
+            optionType: questionInnerObj.optionType || "",
+            isAudioEnabled: questionInnerObj.isAudioEnabled || "",
+            options: {},
+            question_image: questionInnerObj.question_image
+              ? config.repositoryHost + questionInnerObj.question_image
+              : "",
+            options_image: {}
+          };
+  
+          if (
+            questionInnerObj.questionType === "fbtt" ||
+            questionInnerObj.questionType === "dd1"
+          ) {
+            const options = Object.values(questionInnerObj.options || {});
+            const correctAnswers = Object.values(questionInnerObj.correctAnswer || {});
+            const finalOptions = options.concat(correctAnswers).filter((elem, pos, arr) => arr.indexOf(elem) === pos);
+  
+            finalOptions.forEach((option, i) => {
+              questionObj.options[i] = option;
+            });
+          } else if (
+            questionInnerObj.questionType === "dd2" &&
+            questionInnerObj.optionType === "text"
+          ) {
+            Object.entries(questionInnerObj.options).forEach(([key, value]) => {
+              questionInnerObj.options[key] = JSON.parse(value);
+            });
+  
+            Object.entries(questionInnerObj.options).forEach(([key, value]) => {
+              questionObj.options[key] = value;
+            });
+          } else if (
+            questionInnerObj.questionType === "dd2" &&
+            questionInnerObj.optionType === "image"
+          ) {
+            Object.entries(questionInnerObj.options).forEach(([key, values]) => {
+              const updatedValues = values.map(value => config.repositoryHost + value);
+              questionInnerObj.options[key] = updatedValues;
+            });
+  
+            Object.entries(questionInnerObj.options).forEach(([key, values]) => {
+              questionObj.options[key] = values;
+            });
+          } else {
+            questionObj.options = questionInnerObj.options;
+          }
+  
+          if (!_.isEmpty(questionInnerObj.options_image)) {
+            Object.entries(questionInnerObj.options_image).forEach(([optionKey, optionValue]) => {
+              if (optionValue) {
+                questionInnerObj.options_image[optionKey] = config.repositoryHost + optionValue;
+              }
+            });
+  
+            questionObj.options_image = questionInnerObj.options_image;
+          } else {
+            questionObj.options_image = {};
+          }
+  
+          const questionOptions = {};
+          Object.entries(questionObj.options).forEach(([option, value]) => {
+            questionOptions[option] = value || option;
+          });
+          questionObj.options = questionOptions;
+  
+          const correctAnswerKeys = Object.keys(questionInnerObj.correctAnswer || {});
+          const correctAnswerKey = correctAnswerKeys[0];
+  
+          if (questionInnerObj.correctAnswer[correctAnswerKey] === "") {
+            questionInnerObj.correctAnswer[correctAnswerKey] = correctAnswerKey;
+          }
+          questionObj.correctAnswer = questionInnerObj.correctAnswer;
+  
+          return questionObj;
+        })
+      };
+  
+      return questionList;
+    });
+  
+    return finalArray;
   } catch (e) {
     console.log(e);
-    defer.reject(e);
-  }
-  return defer.promise;
+    throw e;
+  }    
 }
 
 /*
@@ -1817,108 +1592,75 @@ async function getClasses(userParam) {
 This API is to get students by the given class and disecode
 */
 async function getStudents(userParam) {
-  let query = {};
-  let queryAssess = {};
-  let finalArray = [];
-
-  //To get active students based on class and disecode
-  query["isActive"] = true;
-  query["diseCode"] = userParam.disecode;
-  query["department"] = userParam.department;
-
-  //To get assessments for logged in teachers state
-  queryAssess["isActive"] = true;
-  queryAssess["published"] = true;
-  queryAssess["startDate"] = { $lte: new Date() };
-  queryAssess["endDate"] = { $gte: new Date() };
-
-  queryAssess["type"] = { $in: ["MT"] };
-  queryAssess["assessmentType"] = "State";
-
-  if (Boolean(userParam.stateId)) {
-    let arrState = [];
-    arrState.push(userParam.stateId);
-    queryAssess["states"] = { $in: arrState };
-  } else {
-    //Get state Id based on disecode
-    const checkSchool = await School.findOne({ diseCode: userParam.disecode });
-    if (checkSchool) {
-      diseStateId = checkSchool.state.toString();
-      let arrState = [];
-      arrState.push(diseStateId);
-      queryAssess["states"] = { $in: arrState };
+  try {
+    const query = {
+      isActive: true,
+      diseCode: userParam.disecode,
+      department: userParam.department,
+    };
+  
+    const queryAssess = {
+      isActive: true,
+      published: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+      type: { $in: ["MT"] },
+      assessmentType: "State",
+    };
+  
+    if (Boolean(userParam.stateId)) {
+      queryAssess.states = { $in: [userParam.stateId] };
+    } else {
+      const checkSchool = await School.findOne({ diseCode: userParam.disecode });
+  
+      if (checkSchool) {
+        queryAssess.states = { $in: [checkSchool.state.toString()] };
+      }
     }
-  }
-
-  //To get total assessments count for this class
-  queryAssess["department"] = userParam.department;
-
-  const dbStudents = await Student.find(query).select(
-    "id childName department"
-  );
-
-  const dbAssessments = await Assessment.find(queryAssess).select("id");
-
-  let arrAssessIds = [];
-
-  if (dbAssessments && dbAssessments.length) {
-    dbAssessments.forEach((element) => {
-      let dbAssessId = new objectId(element.id);
-      arrAssessIds.push(dbAssessId);
-    });
-  }
-
-  const totalTestCnt = arrAssessIds.length;
-
-  let arrStudentIds = [];
-
-  if (dbStudents && dbStudents.length) {
-    dbStudents.forEach((element) => {
-      let dbStudentId = new objectId(element.id);
-      arrStudentIds.push(dbStudentId);
-    });
-  }
-
-  //To get count of tests attempted for all students
-  const progressRecords = await AssessmentStudentProgress.aggregate([
-    {
-      $match: {
-        student: { $in: arrStudentIds },
-        department: new objectId(userParam.department),
-        assessment: { $in: arrAssessIds },
+  
+    queryAssess.department = userParam.department;
+  
+    const dbStudents = await Student.find(query, "id childName department");
+  
+    const dbAssessments = await Assessment.find(queryAssess, "id");
+  
+    const arrAssessIds = dbAssessments.map(element => new objectId(element.id));
+    const totalTestCnt = arrAssessIds.length;
+  
+    const arrStudentIds = dbStudents.map(element => new objectId(element.id));
+  
+    const progressRecords = await AssessmentStudentProgress.aggregate([
+      {
+        $match: {
+          student: { $in: arrStudentIds },
+          department: new objectId(userParam.department),
+          assessment: { $in: arrAssessIds },
+        },
       },
-    },
-    {
-      $group: {
-        _id: "$student",
-        testAttemptedCnt: { $sum: 1 },
+      {
+        $group: {
+          _id: "$student",
+          testAttemptedCnt: { $sum: 1 },
+        },
       },
-    },
-  ]);
-
-  //For all students get the required details
-  if (dbStudents && dbStudents.length) {
-    dbStudents.forEach((element) => {
-      let studentObj = {};
-
-      studentObj["id"] = element.id;
-      studentObj["name"] = element.childName;
-
-      var matchingProgress = _.filter(
-        progressRecords,
-        (item) => String(item._id) === String(element.id)
-      );
-
-      studentObj["test_attempted"] = matchingProgress.length
-        ? matchingProgress[0]["testAttemptedCnt"]
-        : 0;
-      studentObj["test_pending"] = totalTestCnt - studentObj["test_attempted"];
-
-      //Push each object to final array
-      finalArray.push(studentObj);
+    ]);
+  
+    const finalArray = dbStudents.map(element => {
+      const studentObj = {
+        id: element.id,
+        name: element.childName,
+      };
+  
+      const matchingProgress = progressRecords.find(item => String(item._id) === String(element.id));
+  
+      studentObj.test_attempted = matchingProgress ? matchingProgress.testAttemptedCnt : 0;
+      studentObj.test_pending = totalTestCnt - studentObj.test_attempted;
+  
+      return studentObj;
     });
-  }
-
-  //return final array
-  return finalArray;
+  
+    return finalArray;
+  } catch (e) {
+    throw e;
+  }  
 }
