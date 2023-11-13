@@ -32,63 +32,56 @@ module.exports = {
 //To get classwise students report for the given class
 async function getClassStudentRport(req) {
   
-  let finalObj = {
-    studentReports: [],
-  };
-
-  const classId = req.query.classId;
+  try {
+    const classId = req.query.classId;
+    const disecode = req.query.diseCode;
   
-  let disecode = req.query.diseCode;
-  const dbDepartment = await Departmentmaster.findById(classId);
+    const dbDepartment = await Departmentmaster.findById(classId);
   
-  let arrStudentIds = [];
-
-  const dbStudents = await Student.find({ department: classId, diseCode: disecode, isActive: true });
-
-  if (dbStudents && dbStudents.length) {
-    dbStudents.forEach(element => {
-      let dbStudentId = new objectId(element.id);
-      arrStudentIds.push(dbStudentId);
-    });
-  }
-
-  //To get count of stars and percentage
-  const progressRecords = await AssessmentStudentProgress.aggregate([
-  { $match: { 
-      department: new objectId(classId), student: {$in: arrStudentIds}
-    } 
-  },
-  {
-    $group: {
-      _id: "$student",
-      totalStars: { $sum: "$countOfStar" },
-      totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
-      totalQuestionCnt: { $sum: "$totalQuestionCnt" },
-    }
-  }]); 
-
-  if (dbStudents && dbStudents.length) {
-    dbStudents.forEach(element => {
-      let studentObj = {};
-
-      studentObj['studentId'] = element.id;        
-      studentObj['studentName'] = element.childName;
-      studentObj['className'] = dbDepartment.name;
-      const matchingProgress  = _.filter(progressRecords, item => String(item._id) === String(element.id));
-
-      if (matchingProgress.length) {
-        const calcPercentage = (matchingProgress[0]['totalCorrectQuestionCnt'] / matchingProgress[0]['totalQuestionCnt']) * 100;
-        studentObj['totalPercentage'] = Number(calcPercentage.toFixed(2));
-        studentObj['totalRatings'] = matchingProgress[0]['totalStars'];
-      } else {
-        studentObj['totalPercentage'] = 0;          
-        studentObj['totalRatings'] = 0;
-      }        
-      finalObj.studentReports.push(studentObj);
-    });
-  }
-
-  return finalObj;
+    const dbStudents = await Student.find({ department: classId, diseCode, isActive: true });
+  
+    const arrStudentIds = dbStudents.map(element => new objectId(element.id));
+  
+    const progressRecords = await AssessmentStudentProgress.aggregate([
+      {
+        $match: {
+          department: new objectId(classId),
+          student: { $in: arrStudentIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$student",
+          totalStars: { $sum: "$countOfStar" },
+          totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
+          totalQuestionCnt: { $sum: "$totalQuestionCnt" },
+        },
+      },
+    ]);
+  
+    const finalObj = {
+      studentReports: dbStudents.map(element => {
+        const matchingProgress = progressRecords.find(item => String(item._id) === String(element.id));
+  
+        const studentObj = {
+          studentId: element.id,
+          studentName: element.childName,
+          className: dbDepartment.name,
+          totalPercentage: matchingProgress
+            ? Number(((matchingProgress.totalCorrectQuestionCnt / matchingProgress.totalQuestionCnt) * 100).toFixed(2))
+            : 0,
+          totalRatings: matchingProgress ? matchingProgress.totalStars : 0,
+        };
+  
+        return studentObj;
+      }),
+    };
+  
+    return finalObj;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }  
 }
 
 async function registerStudent(req) {
@@ -275,31 +268,27 @@ async function getAssessmentClass(req) {
 }
 
 async function getStudentDetail(req) {
-  const studentId = req.query.studentId;
-  let student = {
-    studentId: "",
-    name: "",
-    parentMobile: "",
-    SRNumber: "",
-    parentName: "",
-    diseCode: "",
-    department: "",
-    createdBy: "",
-  };
-
-  const dbStudent = await Student.findById(studentId);
-  if (dbStudent) {
-    student.studentId = dbStudent.id;
-    student.name = dbStudent.childName;
-    student.department = dbStudent.department;
-    student.SRNumber = dbStudent.srnNo;
-    student.diseCode = dbStudent.diseCode;
-    student.createdBy = dbStudent.createdBy;
-    student.parentName = dbStudent.parentName;
-    student.parentMobile = dbStudent.parentMobile;
-    return student;
-  }
-  return null;
+  try {
+    const studentId = req.query.studentId;
+  
+    const dbStudent = await Student.findById(studentId);
+  
+    return dbStudent
+      ? {
+          studentId: dbStudent.id,
+          name: dbStudent.childName,
+          department: dbStudent.department,
+          SRNumber: dbStudent.srnNo,
+          diseCode: dbStudent.diseCode,
+          createdBy: dbStudent.createdBy,
+          parentName: dbStudent.parentName,
+          parentMobile: dbStudent.parentMobile,
+        }
+      : null;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }  
 }
 async function getAssessmentSubjects(req) {
   const dbSubjects = await Subjectmaster.find({ module: "sa" });
@@ -322,382 +311,278 @@ This API is to get classwise report by subject, class and then assessments
 */
 async function getClasswiseReport(userParam) {
 
-  let query = {};
-  let finalArray = [];
-  const diseCode = userParam.diseCode;
-
-  var searchMask = ' ';
-  var regEx = new RegExp(searchMask, 'ig');
-  var replaceMask = '';
-
-  //To get active assessments based on class id
-  query['isActive'] = true;
-  query['published'] = true;
-  query['startDate'] = { $lte: new Date() };
-  query['endDate'] = { $gte: new Date() };
-
-  query['assessmentType'] = 'State';
-
-  if (Boolean(userParam.stateId)) {
-    var arrState = [];
-    arrState.push(userParam.stateId);
-    query['states'] = { '$in': arrState };
-  }
-
-  /*if(Boolean(userParam.districtId)) {
-    var arrDistrict = []
-    arrDistrict.push(userParam.districtId);
-    query['districts'] = { '$in': arrDistrict };
-  }
-
-  if(Boolean(userParam.blockId)) {
-    var arrBlock = [];
-    arrBlock.push(userParam.blockId);
-    query['blocks'] = { '$in': arrBlock };
-  }*/
-
-  const assessments = await Assessment.find(query);
-
-  //return assessments;  
-
-  //To get all subjects for this sa module
-  const Subjects = await Subjectmaster.find({ module: 'sa' }).select('id name');
-
-  //To get all classes for this sa module
-  const Departments = await Departmentmaster.find({ module: 'sa' }).select('id name');
-
-  //To do groupby on department of assessments received
-  var assessmentsGroupBySubject = _.groupBy(assessments, 'subject');
-
-  //return assessmentsGroupBySubject;
-
-  //Loop through subjects
-  for (var subjectId in assessmentsGroupBySubject) {
-    let assessmentSubjectList = {};
-
-    //To get subject name
-    var subjectName = _.where(Subjects, { id: subjectId });
-
-    //Assigning required subject info to a final object
-    assessmentSubjectList['subjectId'] = subjectId;
-    assessmentSubjectList['subjectName'] = subjectName[0]['name'];
-    assessmentSubjectList['icon'] = config.assetHost + subjectName[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
-    assessmentSubjectList['icon_active'] = config.assetHost + 'big-' + subjectName[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
-
-    //Group by class
-    var assessmentsGroupByClass = _.groupBy(assessmentsGroupBySubject[subjectId], 'department');
-
-    //To assign class objects
-    var assessmentClassArr = [];
-
-    //Loop through departments
-    for (var deptId in assessmentsGroupByClass) {
-      var totalDbAssessments = assessmentsGroupByClass[deptId].length;
-
-      //Each class as object
-      var assessmentClassList = {};
-
-      //To get class name
-      var className = _.where(Departments, { id: deptId });
-
-      //Assigning required subject info to a final object
-      assessmentClassList['classId'] = deptId;
-      assessmentClassList['className'] = className[0]['name'];
-      assessmentClassList['icon'] = config.assetHost + className[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
-      assessmentClassList['icon_active'] = config.assetHost + 'big-' + className[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
-
-      //To get number of students in this class
-      const dbStudents = await Student.find({ department: deptId, diseCode: diseCode, isActive: true });
-
-      var arrStudentIds = [];
-
-      if (dbStudents && dbStudents.length) {
-
-        for (let index = 0; index < dbStudents.length; index++) {
-          const element = dbStudents[index];
-          var dbStudentId = new objectId(element.id);
-          arrStudentIds.push(dbStudentId);
-        }
-
-        var studentCnt = arrStudentIds.length;
-
-        assessmentClassList['totalStudents'] = studentCnt;
-      } else {
-        assessmentClassList['totalStudents'] = 0;
-      }
-
-      //Array of assessment
-      let assessArr = [];
-      var arrAssessIds = [];
-
-      //Loop through assessments
-      for (var assessIndex in assessmentsGroupByClass[deptId]) {
-        var assessInnerObj = assessmentsGroupByClass[deptId][assessIndex];
-
-        var dbAssessId = new objectId(assessInnerObj['id']);
-        arrAssessIds.push(dbAssessId);       
-
-      }
-
-      //To get total counts
-      var progressRecordClass = await AssessmentStudentProgress.aggregate([
-        {
-          $match: {
-            department: new objectId(deptId), subject: new objectId(subjectId),
-            student: { $in: arrStudentIds }, assessment: { $in: arrAssessIds }  
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalStudentsAppeared: { $sum: 1 },
-            totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
-            totalQuestionCnt: { $sum: "$totalQuestionCnt" },
-          }
-        }]);
-
-      if (progressRecordClass.length) {
-        var calcPercentage = (progressRecordClass[0]['totalCorrectQuestionCnt'] / progressRecordClass[0]['totalQuestionCnt']) * 100;
-        assessmentClassList['totalMarksPercentage'] = Number(calcPercentage.toFixed(2));
-        var completedPercentage = (progressRecordClass[0]['totalStudentsAppeared'] / (studentCnt * totalDbAssessments)) * 100;
-        assessmentClassList['completedAssessmentsPercentage'] = Number(completedPercentage.toFixed(2));
-      } else {
-        assessmentClassList['totalMarksPercentage'] = null;
-        assessmentClassList['completedAssessmentsPercentage'] = null;
-      }      
-
-      //To get count of stars and percentage
-      var progressRecords = await AssessmentStudentProgress.aggregate([
-      {
-        $match: { student: {$in: arrStudentIds}, 
-        department: new objectId(deptId),
-        subject: new objectId(subjectId),
-        assessment: { $in: arrAssessIds } } 
-      },
-      {
-        $group: {
-          _id: "$assessment",
-          attemptedCnt: { $sum: 1 },
-          totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
-          totalQuestionCnt: { $sum: "$totalQuestionCnt" }
-        }
-      }]); 
-
-      //Loop through assessments
-      for (var assessIndex in assessmentsGroupByClass[deptId]) {
-        var assessInnerObj = assessmentsGroupByClass[deptId][assessIndex];
-
-        var assessmentId = assessInnerObj['id'];
-
-        var matchingProgress  = _.filter(progressRecords, item => String(item._id) === String(assessmentId));
-
-        if (matchingProgress.length) {
-
-          //Each assessment as an object
-          let assessObj = {};
-
-          assessObj['id'] = assessmentId;
-          assessObj['name'] = assessInnerObj['lesson'];
-
-          assessObj['attemptedCnt'] = matchingProgress[0]['attemptedCnt'];
-
-          var calcPercentage = (matchingProgress[0]['totalCorrectQuestionCnt'] / matchingProgress[0]['totalQuestionCnt']) * 100
-          assessObj['totalPercentage'] = Number(calcPercentage.toFixed(2));
-
-          //Push each object to an array
-          assessArr.push(assessObj);
-        } else {
-          //Each assessment as an object
-          let assessObj = {};
-
-          assessObj['id'] = assessmentId;
-          assessObj['name'] = assessInnerObj['lesson'];
-
-          assessObj['attemptedCnt'] = 0;
-          assessObj['totalPercentage'] = null;
-
-          //Push each object to an array
-          assessArr.push(assessObj);
-        }
-
-      }
-
-      //Push all assessments to class object of assessments
-      assessmentClassList['assessments'] = assessArr;
-
-      //Push class info to an array
-      assessmentClassArr.push(assessmentClassList);
+  try {
+    const diseCode = userParam.diseCode;
+  
+    const query = {
+      isActive: true,
+      published: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+      assessmentType: 'State',
+    };
+  
+    if (Boolean(userParam.stateId)) {
+      const arrState = [userParam.stateId];
+      query.states = { $in: arrState };
     }
-
-    //Sort classes array by class name
-    assessmentClassArr = _.sortBy(assessmentClassArr, 'className');
-
-    //Push all classes info to classes
-    assessmentSubjectList['classes'] = assessmentClassArr;
-
-    //Assign final object to an array
-    finalArray.push(assessmentSubjectList);
-  }
-
-  //To add all subjects icon if there are any assessments
-  if (assessments.length) {
-    let assessmentSubjectList = {};
-
-    var allSubjectName = 'All Subject';
-
-    assessmentSubjectList['subjectName'] = allSubjectName;
-    assessmentSubjectList['icon'] = config.assetHost + allSubjectName.toLowerCase().replace(regEx, replaceMask) + '.png';
-    assessmentSubjectList['icon_active'] = config.assetHost + 'big-' + allSubjectName.toLowerCase().replace(regEx, replaceMask) + '.png';
-
-    finalArray.push(assessmentSubjectList);
-  }
-
-  //return final array
-  return finalArray;
+  
+    const assessments = await Assessment.find(query);
+  
+    const Subjects = await Subjectmaster.find({ module: 'sa' }).select('id name');
+    const Departments = await Departmentmaster.find({ module: 'sa' }).select('id name');
+  
+    const regEx = / /ig;
+    const replaceMask = '';
+  
+    const finalArray = [];
+  
+    const assessmentsGroupBySubject = _.groupBy(assessments, 'subject');
+  
+    for (const subjectId in assessmentsGroupBySubject) {
+      const assessmentSubjectList = {};
+      const subjectName = _.where(Subjects, { id: subjectId });
+  
+      assessmentSubjectList.subjectId = subjectId;
+      assessmentSubjectList.subjectName = subjectName[0].name;
+      assessmentSubjectList.icon = config.assetHost + subjectName[0].name.toLowerCase().replace(regEx, replaceMask) + '.png';
+      assessmentSubjectList.icon_active = config.assetHost + 'big-' + subjectName[0].name.toLowerCase().replace(regEx, replaceMask) + '.png';
+  
+      const assessmentsGroupByClass = _.groupBy(assessmentsGroupBySubject[subjectId], 'department');
+      const assessmentClassArr = [];
+  
+      for (const deptId in assessmentsGroupByClass) {
+        const totalDbAssessments = assessmentsGroupByClass[deptId].length;
+        const assessmentClassList = {};
+        const className = _.where(Departments, { id: deptId });
+  
+        assessmentClassList.classId = deptId;
+        assessmentClassList.className = className[0].name;
+        assessmentClassList.icon = config.assetHost + className[0].name.toLowerCase().replace(regEx, replaceMask) + '.png';
+        assessmentClassList.icon_active = config.assetHost + 'big-' + className[0].name.toLowerCase().replace(regEx, replaceMask) + '.png';
+  
+        const dbStudents = await Student.find({ department: deptId, diseCode, isActive: true });
+        const arrStudentIds = dbStudents.map(element => new objectId(element.id));
+  
+        const studentCnt = arrStudentIds.length;
+        assessmentClassList.totalStudents = studentCnt;
+  
+        const arrAssessIds = assessmentsGroupByClass[deptId].map(assessInnerObj => new objectId(assessInnerObj.id));
+  
+        const progressRecordClass = await AssessmentStudentProgress.aggregate([
+          {
+            $match: {
+              department: new objectId(deptId),
+              subject: new objectId(subjectId),
+              student: { $in: arrStudentIds },
+              assessment: { $in: arrAssessIds },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalStudentsAppeared: { $sum: 1 },
+              totalCorrectQuestionCnt: { $sum: '$correctQuestionCnt' },
+              totalQuestionCnt: { $sum: '$totalQuestionCnt' },
+            },
+          },
+        ]);
+  
+        if (progressRecordClass.length) {
+          const calcPercentage = (progressRecordClass[0].totalCorrectQuestionCnt / progressRecordClass[0].totalQuestionCnt) * 100;
+          assessmentClassList.totalMarksPercentage = Number(calcPercentage.toFixed(2));
+          const completedPercentage = (progressRecordClass[0].totalStudentsAppeared / (studentCnt * totalDbAssessments)) * 100;
+          assessmentClassList.completedAssessmentsPercentage = Number(completedPercentage.toFixed(2));
+        } else {
+          assessmentClassList.totalMarksPercentage = null;
+          assessmentClassList.completedAssessmentsPercentage = null;
+        }
+  
+        const progressRecords = await AssessmentStudentProgress.aggregate([
+          {
+            $match: {
+              student: { $in: arrStudentIds },
+              department: new objectId(deptId),
+              subject: new objectId(subjectId),
+              assessment: { $in: arrAssessIds },
+            },
+          },
+          {
+            $group: {
+              _id: '$assessment',
+              attemptedCnt: { $sum: 1 },
+              totalCorrectQuestionCnt: { $sum: '$correctQuestionCnt' },
+              totalQuestionCnt: { $sum: '$totalQuestionCnt' },
+            },
+          },
+        ]);
+  
+        const assessArr = assessmentsGroupByClass[deptId].map(assessInnerObj => {
+          const assessmentId = assessInnerObj.id;
+          const matchingProgress = progressRecords.find(item => String(item._id) === String(assessmentId));
+  
+          const assessObj = {
+            id: assessmentId,
+            name: assessInnerObj.lesson,
+            attemptedCnt: matchingProgress ? matchingProgress.attemptedCnt : 0,
+          };
+  
+          if (matchingProgress) {
+            const calcPercentage = (matchingProgress.totalCorrectQuestionCnt / matchingProgress.totalQuestionCnt) * 100;
+            assessObj.totalPercentage = Number(calcPercentage.toFixed(2));
+          } else {
+            assessObj.totalPercentage = null;
+          }
+  
+          return assessObj;
+        });
+  
+        assessmentClassList.assessments = assessArr;
+        assessmentClassArr.push(assessmentClassList);
+      }
+  
+      assessmentClassArr = _.sortBy(assessmentClassArr, 'className');
+      assessmentSubjectList.classes = assessmentClassArr;
+      finalArray.push(assessmentSubjectList);
+    }
+  
+    if (assessments.length) {
+      const assessmentSubjectList = {};
+      const allSubjectName = 'All Subject';
+  
+      assessmentSubjectList.subjectName = allSubjectName;
+      assessmentSubjectList.icon = config.assetHost + allSubjectName.toLowerCase().replace(regEx, replaceMask) + '.png';
+      assessmentSubjectList.icon_active = config.assetHost + 'big-' + allSubjectName.toLowerCase().replace(regEx, replaceMask) + '.png';
+  
+      finalArray.push(assessmentSubjectList);
+    }
+  
+    return finalArray;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }  
 }
 
 /*
 This API is to get all subject report 
 */
 async function getAllSubjectReport(userParam) {
-
-  let query = {};
-  let finalArray = [];
-  const diseCode = userParam.diseCode;
-  const studentId = userParam.studentId;
-  const classId = userParam.classId;
-
-  //To get active assessments based on class id
-  query['isActive'] = true;
-  query['published'] = true;
-  query['startDate'] = { $lte: new Date() };
-  query['endDate'] = { $gte: new Date() };
-
-  if (diseCode) {
-    query['assessmentType'] = { '$in': ['State'] };
-
-    if (Boolean(userParam.stateId)) {
-      let arrState = [];
-      arrState.push(userParam.stateId);
-      query['states'] = { '$in': arrState };
+  try {
+    const query = {
+      isActive: true,
+      published: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+    };
+  
+    if (userParam.diseCode) {
+      query.assessmentType = { $in: ['State'] };
+  
+      if (Boolean(userParam.stateId)) {
+        query.states = { $in: [userParam.stateId] };
+      }
     }
-  }
-
-  if (classId) query['department'] = classId;
-
-  const assessments = await Assessment.find(query);
-
-  //To get all subjects for this sa module
-  const Subjects = await Subjectmaster.find({ module: 'sa' }).select('id name');
-
-  //To do groupby on department of assessments received
-  const assessmentsGroupBySubject = _.groupBy(assessments, 'subject');
-
-  let arrAssessIds = [];
-
-  for (let subjectId in assessmentsGroupBySubject) {
-    for (let assessIndex in assessmentsGroupBySubject[subjectId]) {
-      let assessInnerObj = assessmentsGroupBySubject[subjectId][assessIndex];
-      arrAssessIds.push(new objectId(assessInnerObj['id']));
+  
+    if (userParam.classId) {
+      query.department = userParam.classId;
     }
-  }
-
-  //Loop through subjects
-  for (let subjectId in assessmentsGroupBySubject) {
-    let assessmentSubjectList = {};
-
-    //To get subject name
-    const subjectName = _.where(Subjects, { id: subjectId });
-
-    //Assigning required subject info to a final object
-    assessmentSubjectList['subjectId'] = subjectId;
-    assessmentSubjectList['subjectName'] = subjectName[0]['name'];
-    assessmentSubjectList['totalAssessments'] = assessmentsGroupBySubject[subjectId].length;
-
-    if (diseCode) {
-      //To get number of students in this class
-      const dbStudents = await Student.find({ diseCode: diseCode, isActive: true });
-
-      let arrStudentIds = [];
-
-      if (dbStudents && dbStudents.length) {
-        dbStudents.forEach(element => {
-          let dbStudentId = new objectId(element.id);
-          arrStudentIds.push(dbStudentId);
+  
+    const assessments = await Assessment.find(query);
+  
+    const Subjects = await Subjectmaster.find({ module: 'sa' }).select('id name');
+  
+    const assessmentsGroupBySubject = _.groupBy(assessments, 'subject');
+  
+    const arrAssessIds = assessments.flatMap(item => new objectId(item.id));
+  
+    const finalArray = [];
+  
+    for (const subjectId in assessmentsGroupBySubject) {
+      const assessmentSubjectList = {
+        subjectId,
+        subjectName: '',
+        totalAssessments: assessmentsGroupBySubject[subjectId].length,
+        totalMarksPercentage: null,
+        averageStudentsAppeared: null,
+        totalPercentage: null,
+        totalStars: null,
+      };
+  
+      const subjectName = _.where(Subjects, { id: subjectId });
+  
+      if (subjectName.length > 0) {
+        assessmentSubjectList.subjectName = subjectName[0].name;
+      }
+  
+      if (userParam.diseCode) {
+        const dbStudents = await Student.find({ diseCode: userParam.diseCode, isActive: true });
+  
+        const arrStudentIds = dbStudents.map(element => new objectId(element.id));
+  
+        const studentCnt = arrStudentIds.length;
+  
+        const distinctStudents = await AssessmentStudentProgress.distinct("student", {
+          subject: new objectId(subjectId),
+          student: { $in: arrStudentIds }
         });
+  
+        const totalStudentsAppeared = distinctStudents.length;
+  
+        const progressRecord = await AssessmentStudentProgress.aggregate([
+          {
+            $match: {
+              subject: new objectId(subjectId),
+              student: { $in: arrStudentIds },
+              assessment: { $in: arrAssessIds }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
+              totalQuestionCnt: { $sum: "$totalQuestionCnt" },
+            }
+          }]);
+  
+        if (progressRecord.length) {
+          const calcPercentage = (progressRecord[0].totalCorrectQuestionCnt / progressRecord[0].totalQuestionCnt) * 100;
+          assessmentSubjectList.totalMarksPercentage = Number(calcPercentage.toFixed(2));
+          const averageStudents = totalStudentsAppeared / studentCnt;
+          assessmentSubjectList.averageStudentsAppeared = Number(averageStudents.toFixed(2));
+        }
+      } else if (userParam.studentId && userParam.classId) {
+        const progressRecord = await AssessmentStudentProgress.aggregate([
+          {
+            $match: {
+              department: new objectId(userParam.classId),
+              subject: new objectId(subjectId),
+              student: new objectId(userParam.studentId),
+              assessment: { $in: arrAssessIds }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalStars: { $sum: "$countOfStar" },
+              totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
+              totalQuestionCnt: { $sum: "$totalQuestionCnt" },
+            }
+          }]);
+  
+        if (progressRecord.length) {
+          const calcPercentage = (progressRecord[0].totalCorrectQuestionCnt / progressRecord[0].totalQuestionCnt) * 100;
+          assessmentSubjectList.totalPercentage = Number(calcPercentage.toFixed(2));
+          assessmentSubjectList.totalStars = progressRecord[0].totalStars;
+        }
       }
-
-      const studentCnt = arrStudentIds.length;
-      //To get total number of students appeared
-      const distinctStudents = await AssessmentStudentProgress.distinct("student", {
-        subject: new objectId(subjectId),
-        student: { $in: arrStudentIds }
-      });
-
-      const totalStudentsAppeared = distinctStudents.length;
-      //To get total counts
-      const progressRecord = await AssessmentStudentProgress.aggregate([
-        {
-          $match: {            
-            subject: new objectId(subjectId),
-            student: { $in: arrStudentIds },
-            assessment: { $in: arrAssessIds }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
-            totalQuestionCnt: { $sum: "$totalQuestionCnt" },
-          }
-        }]);
-
-      if (progressRecord.length) {
-        let calcPercentage = (progressRecord[0]['totalCorrectQuestionCnt'] / progressRecord[0]['totalQuestionCnt']) * 100;
-        assessmentSubjectList['totalMarksPercentage'] = Number(calcPercentage.toFixed(2));
-        let avergaeStudents = totalStudentsAppeared / studentCnt;
-        assessmentSubjectList['averageStudentsAppeared'] = Number(avergaeStudents.toFixed(2));
-      } else {
-        assessmentSubjectList['totalMarksPercentage'] = null;
-        assessmentSubjectList['averageStudentsAppeared'] = null;
-      }
-    } else if (studentId && classId) {
-
-      //To get count of stars and percentage
-      const progressRecord = await AssessmentStudentProgress.aggregate([
-        {
-          $match: {
-            department: new objectId(classId),
-            subject: new objectId(subjectId),
-            student: new objectId(studentId),
-            assessment: { $in: arrAssessIds }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalStars: { $sum: "$countOfStar" },
-            totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
-            totalQuestionCnt: { $sum: "$totalQuestionCnt" },
-          }
-        }]);
-
-      if (progressRecord.length) {
-        let calcPercentage = (progressRecord[0]['totalCorrectQuestionCnt'] / progressRecord[0]['totalQuestionCnt']) * 100
-        assessmentSubjectList['totalPercentage'] = Number(calcPercentage.toFixed(2));
-        assessmentSubjectList['totalStars'] = progressRecord[0]['totalStars'];
-      } else {
-        assessmentSubjectList['totalPercentage'] = null;
-        assessmentSubjectList['totalStars'] = null;
-      }
+      finalArray.push(assessmentSubjectList);
     }
-
-    //Assign final object to an array
-    finalArray.push(assessmentSubjectList);
-  }
-
-  //return final array
-  return finalArray;
+    return finalArray;
+  } catch (e) {
+    console.log(e);
+    throw e;
+  }  
 }
 
 /*
