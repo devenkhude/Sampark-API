@@ -31,8 +31,6 @@ router.post('/sendPushForDDLesson', sendPushForDDLesson);
 router.post('/offlinesyncing', offlinesyncing);
 //router.post('/lessonunlocked', lessonunlocked);
 
-module.exports = router;
-
 
 function sendcertificate(req, res, next) {
     userActionService.sendcertificate(req.body)
@@ -196,3 +194,5 @@ function sendPushForDDLesson(req, res, next) {
         .then(user => res.json(user))
         .catch(err => next(err));
 }
+
+module.exports = router;

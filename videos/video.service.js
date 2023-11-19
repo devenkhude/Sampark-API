@@ -17,6 +17,7 @@ const Document = db.Document;
 const Scertsolution = db.Scertsolution;
 
 const path = require("path");
+const Q = require("q");
 
 module.exports = {
   getAll,
@@ -116,9 +117,7 @@ async function getVideoUrl(moduleName, videoUrl) {
       url =
         config.repositoryHost + "samparkvideos/" + moduleName + "/" + videoUrl;
     }
-  } catch (err) {
-    
-  }
+  } catch (err) {}
   return url;
 }
 
@@ -128,14 +127,13 @@ async function getVideoUrl(moduleName, videoUrl) {
  * @returns video thumbnail
  * */
 async function getVideoThumbnail(thumbnail, videoCode) {
-  let videoThumbnail = "https://img.youtube.com/vi/" + videoCode + "/hqdefault.jpg";
+  let videoThumbnail =
+    "https://img.youtube.com/vi/" + videoCode + "/hqdefault.jpg";
   try {
     if (thumbnail != "" && thumbnail != "null" && thumbnail != null) {
       videoThumbnail = config.repositoryHost + thumbnail;
-    } 
-  } catch (err) {
-    
-  }
+    }
+  } catch (err) {}
   return videoThumbnail;
 }
 
@@ -145,23 +143,18 @@ async function getVideoThumbnail(thumbnail, videoCode) {
  * @returns video list
  * */
 async function getAllbyDepartmentSubject(departmentname, subjectname, user) {
-  let defer = require("q").defer();
+  const defer = Q.defer();
+
   try {
-    let videoList = [];
-    let likequery = {};
-    let videolikes;
-    let query = {};
-    query["is_active"] = true;
+    const query = { is_active: true };
+    const likequery = user ? { user: user } : {};
+    const videolikes = user ? await Sssvideolike.distinct("video", likequery) : [];
 
     if (departmentname !== "") {
-      query["department"] = departmentname;
+      query.department = departmentname;
     }
     if (subjectname !== "") {
-      query["subject"] = subjectname;
-    }
-    if (user) {
-      likequery["user"] = user;
-      videolikes = await Sssvideolike.distinct("video", likequery);
+      query.subject = subjectname;
     }
 
     const videos = await Video.find(query)
@@ -172,58 +165,49 @@ async function getAllbyDepartmentSubject(departmentname, subjectname, user) {
       )
       .sort({ sort_order: 1 });
 
-    for (const curVideo of videos) {
-      let video = {};
-      const moduleName = curVideo["module"];
-      const subjectName = curVideo["subject"]["name"];
-      const departmentName = curVideo["department"]["name"];
-      const sortOrder = curVideo["sort_order"];
-      video["id"] = curVideo["id"];
-      video["is_shareable"] = curVideo["is_shareable"];
-      video["description"] = curVideo["description"];
-      video["social_content"] = curVideo["social_content"];
-      video["author"] = curVideo["author"];
-      video["name"] = curVideo["name"];
-      video["subject"] = curVideo["subject"];
-      video["department"] = curVideo["department"];
-      video["duration"] = await getVideoDuration(
-        curVideo["duration_min"],
-        curVideo["duration_sec"]
-      );
+    const videoList = await Promise.all(
+      videos.map(async (curVideo) => {
+        const moduleName = curVideo.module;
+        const subjectName = curVideo.subject.name;
+        const departmentName = curVideo.department.name;
+        const sortOrder = curVideo.sort_order;
 
-      video["sub_title"] = await getVideoSubtitle(
-        moduleName,
-        subjectName,
-        departmentName,
-        sortOrder
-      );
-      video["video_code"] = curVideo["video_code"];
-      video["sort_order"] = sortOrder;
-      video["width"] = curVideo["width"];
-      video["height"] = curVideo["height"];
-      video["url"] = await getVideoUrl(moduleName, curVideo["url"]);
-      video["thumbnail"] = await getVideoThumbnail(curVideo["thumbnail"], curVideo["video_code"]);
+        const video = {
+          id: curVideo.id,
+          is_shareable: curVideo.is_shareable,
+          description: curVideo.description,
+          social_content: curVideo.social_content,
+          author: curVideo.author,
+          name: curVideo.name,
+          subject: curVideo.subject,
+          department: curVideo.department,
+          duration: await getVideoDuration(curVideo.duration_min, curVideo.duration_sec),
+          sub_title: await getVideoSubtitle(moduleName, subjectName, departmentName, sortOrder),
+          video_code: curVideo.video_code,
+          sort_order: sortOrder,
+          width: curVideo.width,
+          height: curVideo.height,
+          url: await getVideoUrl(moduleName, curVideo.url),
+          thumbnail: await getVideoThumbnail(curVideo.thumbnail, curVideo.video_code),
+          is_liked: videolikes.includes(curVideo.id) ? true : false,
+          category: "",
+          stream_type: "sssvideo",
+          stream_id: curVideo.id,
+          module: curVideo.module,
+          viewcount: 0,
+          likecount: curVideo.likecount,
+          commentcount: curVideo.commentcount,
+        };
 
-      if (videolikes.hasOwnProperty(curVideo["id"])) {
-        video["is_liked"] = videolikes[curVideo["id"]]
-          ? videolikes[curVideo["id"]]
-          : "";
-      } else {
-        video["is_liked"] = "";
-      }
-      video["category"] = "";
-      video["stream_type"] = "sssvideo";
-      video["stream_id"] = curVideo["id"];
-      video["module"] = curVideo["module"];
-      video["viewcount"] = 0;
-      video["likecount"] = curVideo["likecount"];
-      video["commentcount"] = curVideo["commentcount"];
-      videoList.push(video);
-    }
+        return video;
+      })
+    );
+
     defer.resolve(videoList);
   } catch (e) {
     defer.reject(e);
   }
+
   return defer.promise;
 }
 
@@ -461,81 +445,105 @@ async function getById(id, user) {
  * @returns video
  * */
 async function getByQRCode(qrcode, user) {
-  let defer = require("q").defer();
+  const defer = Q.defer();
 
   try {
-    let source = "video";
-    let video1 = await Video.findOne({ qrcode: qrcode })
-      .populate("subject", "name")
-      .populate("department", "name")
-      .select("-hash");
-
-    if (video1 === null) {
-      source = "audio_textbook";
-      video1 = await Audiotextbook.findOne({ qrcode: qrcode })
-        .populate("subject", "name")
-        .populate("department", "name")
-        .select("-hash");
-    }
-
-    if (video1 === null) {
-      return "";
-    }
-
-    const video = video1.toObject();
-    let id = video["_id"];
-
-    if (user) {
-      let qrscan;
-      update_user_points(user, 10, null, null);
-      if (source === "video") {
-        qrscan = new Qrscan({ video: id, user: user });
-      } else {
-        video["video_code"] = video["audiotextbook_code"];
-        qrscan = new Qrscan({ audio_textbook: id, user: user });
+    const video = await findVideoByQRCode(qrcode, "video");
+    if (!video) {
+      const audioTextbook = await findVideoByQRCode(qrcode, "audio_textbook");
+      if (!audioTextbook) {
+        defer.resolve(""); // No matching video or audio_textbook found
+        return defer.promise;
       }
-      qrscan.save();
+      const audioTextbookData = await processVideoData(
+        audioTextbook,
+        user,
+        "sssvideo"
+      );
+      defer.resolve(audioTextbookData);
+    } else {
+      const videoData = await processVideoData(video, user, "sssvideo");
+      defer.resolve(videoData);
     }
-
-    video["id"] = video["_id"];
-    video["is_liked"] = "";
-    video["duration"] = await getVideoDuration(video["duration_min"], video["duration_sec"]);
-    video["stream_type"] = "sssvideo";
-    video["stream_id"] = video["_id"];
-    
-    const videolikecount = await Sssvideolike.find({ video: id }).countDocuments();
-    video["likecount"] = videolikecount;
-    video["viewcount"] = 0;
-
-    const videocommentcount = await Sssvideocomment.find({
-      video: id,
-    }).countDocuments();
-    video["commentcount"] = videocommentcount;
-    const moduleName = video1["module"];
-    const subjectName = video1["subject"]["name"];
-    const departmentName = video1["department"]["name"];
-    const sortOrder = video1["sort_order"];
-    video["sub_title"] = await getVideoSubtitle(moduleName, subjectName, departmentName, sortOrder);
-    video["url"] = await getVideoUrl(video["module"], video["url"]);
-    video["thumbnail"] = await getVideoThumbnail(video["thumbnail"], video["video_code"]);
-
-    if (user !== "") {
-      const userlikes = await Sssvideolike.find({
-        user: user,
-        video: id,
-      }).select("video is_liked");
-      for (const userlike of userlikes) {
-        video["is_liked"] = userlike["is_liked"];
-      }
-    }
-    
-    let videoData = {};
-    videoData["video"] = video;
-    defer.resolve(videoData);
   } catch (err) {
     defer.reject(err);
   }
+
   return defer.promise;
+}
+
+async function findVideoByQRCode(qrcode, source) {
+  return source === "video"
+    ? await Video.findOne({ qrcode: qrcode })
+        .populate("subject", "name")
+        .populate("department", "name")
+        .select("-hash")
+    : await Audiotextbook.findOne({ qrcode: qrcode })
+        .populate("subject", "name")
+        .populate("department", "name")
+        .select("-hash");
+}
+
+async function processVideoData(video1, user, source) {
+  const video = video1.toObject();
+  const id = video["_id"];
+
+  if (user) {
+    update_user_points(user, 10, null, null);
+    const qrscan = new Qrscan({
+      [source === "video" ? "video" : "audio_textbook"]: id,
+      user: user,
+    });
+    qrscan.save();
+  }
+
+  video["id"] = id;
+  video["is_liked"] = "";
+  video["duration"] = await getVideoDuration(
+    video["duration_min"],
+    video["duration_sec"]
+  );
+  video["stream_type"] = "sssvideo";
+  video["stream_id"] = id;
+
+  const videolikecount = await Sssvideolike.find({
+    video: id,
+  }).countDocuments();
+  video["likecount"] = videolikecount;
+  video["viewcount"] = 0;
+
+  const videocommentcount = await Sssvideocomment.find({
+    video: id,
+  }).countDocuments();
+  video["commentcount"] = videocommentcount;
+  const moduleName = video1["module"];
+  const subjectName = video1["subject"]["name"];
+  const departmentName = video1["department"]["name"];
+  const sortOrder = video1["sort_order"];
+  video["sub_title"] = await getVideoSubtitle(
+    moduleName,
+    subjectName,
+    departmentName,
+    sortOrder
+  );
+  video["url"] = await getVideoUrl(video["module"], video["url"]);
+  video["thumbnail"] = await getVideoThumbnail(
+    video["thumbnail"],
+    video["video_code"]
+  );
+
+  if (user !== "") {
+    const userlikes = await Sssvideolike.find({ user: user, video: id }).select(
+      "video is_liked"
+    );
+    for (const userlike of userlikes) {
+      video["is_liked"] = userlike["is_liked"];
+    }
+  }
+
+  const videoData = {};
+  videoData["video"] = video;
+  return videoData;
 }
 
 async function create(req) {

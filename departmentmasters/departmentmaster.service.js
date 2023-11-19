@@ -18,7 +18,7 @@ module.exports = {
 };
 
 async function getAllWithSubjects() {
-  let defer = require("q").defer();
+  const defer = require("q").defer();
   try {
     const subject_masters = await Subjectmaster.find()
       .sort({ sort_order: 1 })
@@ -27,84 +27,71 @@ async function getAllWithSubjects() {
       .sort({ sort_order: 1 })
       .select("-hash");
 
-    let subjects = {};
-    let final_data = {};
-    final_data["sss"] = [];
-    final_data["sst"] = [];
-    final_data["ssh"] = [];
-    final_data["sa"] = [];
-    final_data["elearning"] = [];
-    final_data["dd"] = [];
-    if (subject_masters && subject_masters.length > 0) {
-      subject_masters.forEach((subjectMaster) => {
-        subjects[subjectMaster["id"]] = {};
-        subjects[subjectMaster["id"]]["id"] = subjectMaster["id"];
-        subjects[subjectMaster["id"]]["name"] = subjectMaster["name"];
-        subjects[subjectMaster["id"]]["is_default"] =
-          subjectMaster["is_default"];
-        subjects[subjectMaster["id"]]["for_registration"] = subjectMaster[
-          "for_registration"
-        ]
-          ? subjectMaster["for_registration"]
-          : false;
-        subjects[subjectMaster["id"]]["registration_name"] = subjectMaster[
-          "registration_name"
-        ]
-          ? subjectMaster["registration_name"]
-          : subjectMaster["name"];
-      });
-    }
+    const subjects = subject_masters.reduce((acc, subjectMaster) => {
+      acc[subjectMaster.id] = {
+        id: subjectMaster.id,
+        name: subjectMaster.name,
+        is_default: subjectMaster.is_default,
+        for_registration: subjectMaster.for_registration || false,
+        registration_name:
+          subjectMaster.registration_name || subjectMaster.name,
+      };
+      return acc;
+    }, {});
+
+    const final_data = {
+      sss: [],
+      sst: [],
+      ssh: [],
+      sa: [],
+      elearning: [],
+      dd: [],
+    };
+
     let default_subject = true;
-    if (department_masters && department_masters.length > 0) {
-      department_masters.forEach((departmentMaster) => {
-        let department_master = {};
-        let department_subjects = departmentMaster["subjects"];
-        let department_subject_details = [];
-        if (department_subjects && department_subjects.length > 0) {
-          department_subjects.forEach(async (departmentSubject) => {
-            const video_count = await Video.find({
-              department: departmentMaster.id,
-              subject: departmentSubject,
-            }).countDocuments();
-            let curSubject = {};
-            curSubject.name = subjects[departmentSubject].name;
-            curSubject.for_registration =
-              subjects[departmentSubject].for_registration;
-            curSubject.registration_name =
-              subjects[departmentSubject].registration_name;
-            curSubject.id = subjects[departmentSubject].id;
-            curSubject.is_default = default_subject;
-            curSubject.videos = video_count;
-            department_subject_details.push(curSubject);
-            default_subject = false;
-          });
-        }
-        department_master["subjects"] = department_subject_details;
-        department_master["name"] = departmentMaster.name;
-        department_master["for_registration"] = departmentMaster[
-          "for_registration"
-        ]
-          ? departmentMaster["for_registration"]
-          : false;
-        department_master["registration_name"] = departmentMaster[
-          "registration_name"
-        ]
-          ? departmentMaster["registration_name"]
-          : departmentMaster["name"];
-        if (final_data[departmentMaster["module"]].length == 0) {
-          department_master["is_default"] = true;
-        } else {
-          department_master["is_default"] = false;
-        }
-        department_master["id"] = departmentMaster.id;
-        final_data[departmentMaster["module"]].push(department_master);
+
+    department_masters.forEach((departmentMaster) => {
+      const department_subjects = departmentMaster.subjects;
+      const department_subject_details = [];
+
+      department_subjects.forEach(async (departmentSubject) => {
+        const video_count = await Video.find({
+          department: departmentMaster.id,
+          subject: departmentSubject,
+        }).countDocuments();
+
+        const curSubject = {
+          name: subjects[departmentSubject].name,
+          for_registration: subjects[departmentSubject].for_registration,
+          registration_name: subjects[departmentSubject].registration_name,
+          id: subjects[departmentSubject].id,
+          is_default: default_subject,
+          videos: video_count,
+        };
+
+        department_subject_details.push(curSubject);
+        default_subject = false;
       });
-    }
+
+      const department_master = {
+        subjects: department_subject_details,
+        name: departmentMaster.name,
+        for_registration: departmentMaster.for_registration || false,
+        registration_name:
+          departmentMaster.registration_name || departmentMaster.name,
+        is_default: final_data[departmentMaster.module].length === 0,
+        id: departmentMaster.id,
+      };
+
+      final_data[departmentMaster.module].push(department_master);
+    });
+
     defer.resolve(final_data);
   } catch (err) {
-    console.log("error", err);
+    console.error("error", err);
     defer.reject(err);
   }
+
   return defer.promise;
 }
 

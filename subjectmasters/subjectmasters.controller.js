@@ -19,30 +19,18 @@ function create(req, res, next) {
     .catch((err) => next(err));
 }
 
-async function getAllWithDepartments(req, res, next) {
-  try {
-    const subjectmasters = await subjectmasterService.getAllWithDepartments();
-    res.json(subjectmasters);
-  } catch (err) {
-    next(err);
-  }
-  // subjectmasterService
-  //   .getAllWithDepartments()
-  //   .then((subjectmasters) => res.json(subjectmasters))
-  //   .catch((err) => next(err));
+function getAllWithDepartments(req, res, next) {
+  subjectmasterService
+    .getAllWithDepartments()
+    .then((subjectmasters) => res.json(subjectmasters))
+    .catch((err) => next(err));
 }
 
-async function getAll(req, res, next) {
-  try {
-    const subjects = await subjectmasterService.getAll();
-    res.json(subjects);
-  } catch (err) {
-    next(err);
-  }
-  // subjectmasterService
-  //   .getAll()
-  //   .then((subjectmasters) => res.json(subjectmasters))
-  //   .catch((err) => next(err));
+function getAll(req, res, next) {
+  subjectmasterService
+    .getAll()
+    .then((subjectmasters) => res.json(subjectmasters))
+    .catch((err) => next(err));
 }
 
 function getCurrent(req, res, next) {

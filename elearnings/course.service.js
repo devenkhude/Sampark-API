@@ -66,192 +66,170 @@ async function getCourseDetail(
   certificationGroups,
   liveSessions
 ) {
-  let defer = q.defer();
+  const defer = q.defer();
   try {
-    let courseDetail = {};
+    const courseDetail = {
+      id: curCourse.id,
+      name: curCourse.name,
+      description: curCourse.description,
+      rating: curCourse.rating,
+      startDate: curCourse.startDate,
+      endDate: curCourse.endDate,
+      isPublished: curCourse.isPublished,
+      publishedDate: curCourse.publishedDate,
+      image: config.repositoryHost + curCourse.image,
+      introductoryImage: curCourse.introductoryImage
+        ? config.repositoryHost + curCourse.introductoryImage
+        : "",
+    };
 
-    courseDetail["id"] = curCourse.id;
-    courseDetail["name"] = curCourse.name;
-    courseDetail["description"] = curCourse.description;
-    courseDetail["rating"] = curCourse.rating;
-    courseDetail["startDate"] = curCourse.startDate;
-    courseDetail["endDate"] = curCourse.endDate;
-    courseDetail["isPublished"] = curCourse.isPublished;
-    courseDetail["publishedDate"] = curCourse.publishedDate;
-    courseDetail["image"] = config.repositoryHost + curCourse.image;
-    courseDetail["introductoryImage"] = curCourse.introductoryImage
-      ? config.repositoryHost + curCourse.introductoryImage
-      : "";
+    const momentCurDateObj = moment();
+    const curDate = momentCurDateObj.startOf("day").toISOString();
+    const momentStartDateObj = moment(curCourse.startDate);
+    const startDate = momentStartDateObj.startOf("day").toISOString();
 
-    let momentCurDateObj = moment(new Date(), "MM-DD-YYYY");
-    let curDate = momentCurDateObj.startOf("day").toISOString();
-    let momentStartDateObj = moment(curCourse.startDate, "MM-DD-YYYY");
-    let startDate = momentStartDateObj.startOf("day").toISOString();
-
-    if (startDate > curDate) {
-      courseDetail["isTopPick"] = false;
-      courseDetail["isLatest"] = true;
-    } else {
-      courseDetail["isTopPick"] = true;
-      courseDetail["isLatest"] = false;
-    }
+    courseDetail.isTopPick = startDate > curDate;
+    courseDetail.isLatest = !courseDetail.isTopPick;
 
     let totalDuration = 0;
-    if (curCourse.totalDuration != "null") {
-      let totalDurations = curCourse.totalDuration.toString().split(":");
-      let hrs = parseInt(totalDurations[0]);
-      let mins = totalDurations.length > 1 ? parseInt(totalDurations[1]) : 0;
-      let secs = totalDurations.length > 2 ? parseInt(totalDurations[2]) : 0;
-      totalDuration = hrs * 60 * 60 + mins * 60 + secs;
-      if (totalDuration == "NaN") totalDuration = 0;
+    if (curCourse.totalDuration !== "null") {
+      const totalDurations = curCourse.totalDuration.split(":").map(Number);
+      totalDuration = totalDurations.reduce(
+        (acc, val, index) =>
+          acc + val * Math.pow(60, totalDurations.length - 1 - index),
+        0
+      );
     }
-    courseDetail["noOfModules"] = curCourse.noOfModules;
-    courseDetail["totalDuration"] = totalDuration;
-    courseDetail["subject"] = curCourse.subject;
-    courseDetail["class"] = curCourse.department;
-    courseDetail["certificationGroup"] = "";
-    courseDetail["certificationGroupName"] = "";
+
+    courseDetail.noOfModules = curCourse.noOfModules;
+    courseDetail.totalDuration = totalDuration;
+    courseDetail.subject = curCourse.subject;
+    courseDetail.class = curCourse.department;
+    courseDetail.certificationGroup = "";
+    courseDetail.certificationGroupName = "";
+
     if (curCourse.certificationGroup) {
       const certification = certificationGroups.find(
-        (e) => e["id"].toString() === curCourse.certificationGroup.toString()
+        (e) => e.id.toString() === curCourse.certificationGroup.toString()
       );
-      courseDetail["certificationGroup"] = certification.id;
-      courseDetail["certificationGroupName"] = certification.name;
+      courseDetail.certificationGroup = certification?.id || "";
+      courseDetail.certificationGroupName = certification?.name || "";
     }
-    courseDetail["class"] = curCourse.certificationGroup;
-    courseDetail["userStatus"] = "not-enrolled";
-    courseDetail["remainingDuration"] = totalDuration;
-    courseDetail["points"] = "";
-    courseDetail["completion_date"] = "";
 
-    if (coursesSuggestedForYou.indexOf(curCourse.id.toString()) > -1)
-      courseDetail["userStatus"] = "suggested";
+    courseDetail.class = curCourse.certificationGroup;
+    courseDetail.userStatus = "not-enrolled";
+    courseDetail.remainingDuration = totalDuration;
+    courseDetail.points = "";
+    courseDetail.completion_date = "";
+
+    if (coursesSuggestedForYou.includes(curCourse.id.toString()))
+      courseDetail.userStatus = "suggested";
 
     const checkLiveSession = liveSessions.find(
-      (p) => p["course"].toString() === curCourse.id.toString()
+      (p) => p.course.toString() === curCourse.id.toString()
     );
     const checkEnrollment = enrollments.find(
-      (p) => p["course"].toString() === curCourse.id.toString()
+      (p) => p.course.toString() === curCourse.id.toString()
     );
 
-    if (checkLiveSession) {
-      courseDetail["livesession"] = checkLiveSession;
-    } else {
-      courseDetail["livesession"] = "";
-    }
-    if (checkEnrollment && checkEnrollment["status"] == "in-progress") {
-      courseDetail["userStatus"] = "in-progress";
-      courseDetail["points"] = checkEnrollment.points;
-      courseDetail["remainingDuration"] = totalDuration;
-    } else if (checkEnrollment && checkEnrollment["status"] == "completed") {
-      courseDetail["userStatus"] = "completed";
-      courseDetail["points"] = checkEnrollment.points;
-      courseDetail["completion_date"] = checkEnrollment.completionDate;
+    courseDetail.livesession = checkLiveSession || "";
+
+    if (checkEnrollment) {
+      courseDetail.userStatus = checkEnrollment.status;
+      courseDetail.points = checkEnrollment.points || "";
+      courseDetail.remainingDuration = totalDuration;
+      courseDetail.completion_date = checkEnrollment.completionDate || "";
     }
 
     defer.resolve(courseDetail);
   } catch (e) {
     console.log(e);
-    throw e;
     defer.reject(e);
+    throw e;
   }
   return defer.promise;
 }
 
 async function getAllCourses(userid) {
   //Query objects
-  let defer = require("q").defer();
+  const defer = require("q").defer();
   try {
-    let momentObj = moment(new Date(), "MM-DD-YYYY");
-    let checkDate = momentObj.endOf("day").toISOString();
+    const momentObj = moment();
+    const checkDate = momentObj.endOf("day").toISOString();
 
-    let query = {};
-    query["isPublished"] = true;
-    query["isActive"] = true;
-    query["publishedDate"] = {};
-    query["publishedDate"]["$lte"] = checkDate;
-    query["$or"] = [];
-    let queryEndDate = {};
-    queryEndDate["endDate"] = {};
-    queryEndDate["endDate"]["$exists"] = false;
-    query["$or"].push(queryEndDate);
-    queryEndDate = {};
-    queryEndDate["endDate"] = {};
-    queryEndDate["endDate"]["$gte"] = checkDate;
-    query["$or"].push(queryEndDate);
+    const query = {
+      isPublished: true,
+      isActive: true,
+      publishedDate: { $lte: checkDate },
+      $or: [{ endDate: { $exists: false } }, { endDate: { $gte: checkDate } }],
+    };
 
-    let curUser = await getCurrentUserDetails(userid);
+    const curUser = await getCurrentUserDetails(userid);
 
-    query["applicable_for"] = {};
-    if (curUser[0] && curUser[0]["usertype"] == "spark") {
-      if (curUser[0]["intern_user"]) {
-        query["applicable_for"]["$in"] = ["Both", "Intern", "SparkIntern"];
-      } else {
-        query["applicable_for"]["$in"] = ["Both", "Spark", "SparkIntern"];
-      }
-    } else if (curUser[0] && curUser[0]["usertype"] == "govt teacher") {
-      query["applicable_for"]["$in"] = ["Both", "Teacher"];
+    const userType = curUser[0]?.usertype || "";
+    const isInternUser = curUser[0]?.intern_user || false;
+    const isTemporaryUser = curUser[0]?.temporary_user || false;
+
+    if (userType === "spark") {
+      const applicableForValues = isInternUser
+        ? ["Both", "Intern", "SparkIntern"]
+        : ["Both", "Spark", "SparkIntern"];
+      query.applicable_for = { $in: applicableForValues };
+    } else if (userType === "govt teacher") {
+      query.applicable_for = { $in: ["Both", "Teacher"] };
     } else {
-      query["applicable_for"]["$in"] = ["Both", "Child"];
+      query.applicable_for = { $in: ["Both", "Child"] };
     }
 
-    //temporary sparks will get only pre-induction courses and others will get all courses irrespective of this condition
-    if (curUser[0] && curUser[0]["temporary_user"]) {
-      query["isPreInductionCourse"] = true;
+    if (isTemporaryUser) {
+      query.isPreInductionCourse = true;
     }
 
     const enrollments = await Enrollment.find({ user: userid });
     const progressCourses = enrollments.filter(
-      (p) => p["status"].toString() === "in-progress"
+      (p) => p.status === "in-progress"
     );
 
     const enrolledCourseIds = enrollments.map((value) => value.course);
     const progressCourseIds = progressCourses.map((value) => value.course);
 
-    let coursesSuggestedForYou = [];
-    const certificationGroups = await Certification.find({}, { name: 1 });
-    let courseList = [];
-    let liveSessions = [];
-    if (progressCourseIds.length > 0) {
-      const suggestedCourses = await Course.find({
-        _id: { $in: progressCourseIds },
-      });
-      for (const curCourse of suggestedCourses) {
-        let sub = curCourse.subject;
-        let dept = curCourse.department;
-        let suggestedCourse = await Course.distinct("_id", {
-          subject: sub,
-          department: dept,
-        });
-        for (const courseId of suggestedCourse) {
-          coursesSuggestedForYou.push(courseId.toString());
-        }
-      }
-    }
-    let queryLiveSession = {};
-    queryLiveSession["startDate"] = {};
-    queryLiveSession["startDate"]["$gte"] = new Date();
-    queryLiveSession["isActive"] = true;
+    const coursesSuggestedForYou = progressCourseIds.reduce(
+      (acc, curCourseId) => {
+        const suggestedCourses = enrollments
+          .filter(
+            (enrollment) =>
+              enrollment.course.toString() === curCourseId.toString()
+          )
+          .map((enrollment) => enrollment.course.toString());
+        return acc.concat(suggestedCourses);
+      },
+      []
+    );
 
-    liveSessions = await Livesession.find(queryLiveSession);
+    const queryLiveSession = {
+      startDate: { $gte: new Date() },
+      isActive: true,
+    };
 
-    let finalQuery = {};
-    finalQuery["$or"] = [];
-    finalQuery["$or"].push(query);
-    finalQuery["$or"].push({ _id: { $in: enrolledCourseIds } });
+    const liveSessions = await Livesession.find(queryLiveSession);
+
+    const finalQuery = {
+      $or: [query, { _id: { $in: enrolledCourseIds } }],
+    };
 
     const courses = await Course.find(finalQuery);
+    const courseList = await Promise.all(
+      courses.map((curCourse) =>
+        getCourseDetail(
+          curCourse,
+          enrollments,
+          coursesSuggestedForYou,
+          certificationGroups,
+          liveSessions
+        )
+      )
+    );
 
-    for (const curCourse of courses) {
-      let course = await getCourseDetail(
-        curCourse,
-        enrollments,
-        coursesSuggestedForYou,
-        certificationGroups,
-        liveSessions
-      );
-      if (course) courseList.push(course);
-    }
     defer.resolve(courseList);
   } catch (e) {
     console.error(e);
@@ -267,13 +245,14 @@ async function getModuleDetail(
   userid,
   moduleProgresses
 ) {
-  let defer = q.defer();
+  const defer = q.defer();
   try {
-    let videoids = [];
-    let worksheetids = [];
+    const videoids = [];
+    const worksheetids = [];
     const courseProgress = courseProgresses.find(
-      (p) => p["module"].toString() === curModule.id.toString()
+      (p) => p.module.toString() === curModule.id.toString()
     );
+
     const videos = await Video.find(
       { _id: { $in: curModule.videos } },
       {
@@ -286,134 +265,126 @@ async function getModuleDetail(
         duration_sec: 1,
       }
     );
-    let worksheets = [];
-    if (
-      curModule.worksheets.length > 1 ||
-      (curModule.worksheets.length == 1 && curModule.worksheets[0] != "")
-    ) {
-      worksheets = await Document.find(
-        { _id: { $in: curModule.worksheets } },
-        { name: 1, doc_url: 1 }
-      );
-    }
-    let videoList = [];
-    let steps = 0;
-    for (const video of videos) {
-      let videoData = {};
 
-      let duration = "";
-      if (video.duration_min != "" && video.duration_min != null) {
-        duration = parseInt(video.duration_min) * 60;
-      }
-      if (video.duration_sec != "" && video.duration_sec != null) {
-        duration = duration + parseInt(video.duration_sec);
-      }
-      let progress = moduleProgresses.find(
+    const worksheets =
+      curModule.worksheets.length > 1 ||
+      (curModule.worksheets.length === 1 && curModule.worksheets[0] !== "")
+        ? await Document.find(
+            { _id: { $in: curModule.worksheets } },
+            { name: 1, doc_url: 1 }
+          )
+        : [];
+
+    const videoList = videos.map((video) => {
+      const duration =
+        (video.duration_min !== "" && video.duration_min !== null
+          ? parseInt(video.duration_min) * 60
+          : 0) +
+        (video.duration_sec !== "" && video.duration_sec !== null
+          ? parseInt(video.duration_sec)
+          : 0);
+
+      const progress = moduleProgresses.find(
         (p) =>
-          p.module.toString() == curModule.id.toString() &&
-          p.viewedItemType.toString() == "video" &&
-          p.viewedItem.toString() == video.id.toString()
+          p.module.toString() === curModule.id.toString() &&
+          p.viewedItemType.toString() === "video" &&
+          p.viewedItem.toString() === video.id.toString()
       );
-      if (progress) {
-        videoData["watched"] = true;
-      } else {
-        videoData["watched"] = false;
-      }
+
       videoids.push(video.id.toString());
-      videoData["id"] = video.id;
-      videoData["name"] = video.name;
-      videoData["description"] = video.description;
-      videoData["url"] =
-        config.repositoryHost +
-        "samparkvideos/" +
-        video.module +
-        "/" +
-        video.url;
-      videoData["video_code"] = video.video_code;
-      videoData["duration"] = duration;
-      steps = steps + 1;
-      videoData["display_count"] = (
-        curModule.videos.indexOf(video["id"]) + 1
-      ).toString();
-      videoData["sortOrder"] = curModule.videos.indexOf(video["id"]);
-      videoList[curModule.videos.indexOf(video["id"])] = videoData;
-    }
-    let worksheetList = [];
-    let inc = steps + 1;
-    for (const worksheet of worksheets) {
-      let worksheetData = {};
+
+      return {
+        id: video.id,
+        name: video.name,
+        description: video.description,
+        url:
+          config.repositoryHost +
+          "samparkvideos/" +
+          video.module +
+          "/" +
+          video.url,
+        video_code: video.video_code,
+        duration: duration,
+        watched: progress ? true : false,
+        display_count: (curModule.videos.indexOf(video.id) + 1).toString(),
+        sortOrder: curModule.videos.indexOf(video.id),
+      };
+    });
+
+    const worksheetList = worksheets.map((worksheet) => {
+      const progress = moduleProgresses.find(
+        (p) =>
+          p.module.toString() === curModule.id.toString() &&
+          p.viewedItemType.toString() === "worksheet" &&
+          p.viewedItem.toString() === worksheet.id.toString()
+      );
 
       worksheetids.push(worksheet.id.toString());
-      worksheetData["id"] = worksheet.id;
-      worksheetData["name"] = worksheet.name;
-      worksheetData["url"] = config.repositoryHost + worksheet.doc_url;
-      let progress = moduleProgresses.find(
-        (p) =>
-          p.module.toString() == curModule.id.toString() &&
-          p.viewedItemType.toString() == "worksheet" &&
-          p.viewedItem.toString() == worksheet.id.toString()
-      );
-      if (progress) {
-        worksheetData["watched"] = true;
-      } else {
-        worksheetData["watched"] = false;
-      }
-      steps = steps + 1;
-      worksheetData["display_count"] = (
-        curModule.worksheets.indexOf(worksheet["id"]) + inc
-      ).toString();
-      worksheetData["sortOrder"] = curModule.worksheets.indexOf(
-        worksheet["id"]
-      );
-      worksheetList[curModule.worksheets.indexOf(worksheet["id"])] =
-        worksheetData;
-    }
-    let videoswatched = await Sssvideoviewed.distinct("video", {
-      user: userid,
-      video: { $in: videoids },
+
+      return {
+        id: worksheet.id,
+        name: worksheet.name,
+        url: config.repositoryHost + worksheet.doc_url,
+        watched: progress ? true : false,
+        display_count: (
+          curModule.worksheets.indexOf(worksheet.id) +
+          videoList.length +
+          1
+        ).toString(),
+        sortOrder: curModule.worksheets.indexOf(worksheet.id),
+      };
     });
-    videoswatched = videoswatched.map(function (item) {
-      return item.toString();
+
+    const videoswatched = (
+      await Sssvideoviewed.distinct("video", {
+        user: userid,
+        video: { $in: videoids },
+      })
+    ).map((item) => item.toString());
+
+    videoList.forEach((video) => {
+      if (videoswatched.includes(video.id.toString())) video.watched = true;
     });
-    for (const video of videoList) {
-      if (videoswatched.indexOf(video.id.toString()) > -1)
-        video["watched"] = true;
-    }
-    let worksheetswatched = await Documentviewed.distinct("document", {
-      user: userid,
-      doc_type: "worksheet",
+
+    const worksheetswatched = (
+      await Documentviewed.distinct("document", {
+        user: userid,
+        doc_type: "worksheet",
+      })
+    ).map((item) => item.toString());
+
+    worksheetList.forEach((worksheet) => {
+      if (worksheetswatched.includes(worksheet.id.toString()))
+        worksheet.watched = true;
     });
-    worksheetswatched = worksheetswatched.map(function (item) {
-      return item.toString();
-    });
-    for (const worksheet of worksheetList) {
-      if (worksheetswatched.indexOf(worksheet.id.toString()) > -1)
-        worksheet["watched"] = true;
+
+    const moduleDetail = {
+      id: curModule.id,
+      name: curModule.name,
+      image: config.repositoryHost + curModule.image,
+      duration: 0,
+      description: curModule.description,
+      sortOrder: curModule.sortOrder,
+      userStatus: courseProgress ? courseProgress.status : "not-started",
+      videos: videoList,
+      worksheets: worksheetList,
+      quiz: curModule.quiz,
+      quiz_display_count: (
+        videoList.length +
+        worksheetList.length +
+        1
+      ).toString(),
+      quizTaken:
+        courseProgress && courseProgress.status === "completed" ? true : false,
+    };
+
+    if (curModule.duration !== "null") {
+      const totalDurations = curModule.duration.toString().split(":");
+      const hrs = parseInt(totalDurations[0]);
+      const mins = totalDurations.length > 1 ? parseInt(totalDurations[1]) : 0;
+      moduleDetail.duration = hrs * 60 + mins;
+      if (isNaN(moduleDetail.duration)) moduleDetail.duration = 0;
     }
-    let moduleDetail = {};
-    let totalDuration = 0;
-    if (curModule.duration != "null") {
-      let totalDurations = curModule.duration.toString().split(":");
-      let hrs = parseInt(totalDurations[0]);
-      let mins = totalDurations.length > 1 ? parseInt(totalDurations[1]) : 0;
-      totalDuration = hrs * 60 + mins;
-      if (totalDuration == "NaN") totalDuration = 0;
-    }
-    moduleDetail["id"] = curModule.id;
-    moduleDetail["name"] = curModule.name;
-    moduleDetail["image"] = config.repositoryHost + curModule.image;
-    moduleDetail["duration"] = totalDuration;
-    moduleDetail["description"] = curModule.description;
-    moduleDetail["sortOrder"] = curModule.sortOrder;
-    moduleDetail["userStatus"] = courseProgress
-      ? courseProgress.status
-      : "not-started";
-    moduleDetail["videos"] = videoList;
-    moduleDetail["worksheets"] = worksheetList;
-    moduleDetail["quiz"] = curModule.quiz;
-    moduleDetail["quiz_display_count"] = (steps + 1).toString();
-    moduleDetail["quizTaken"] =
-      courseProgress && courseProgress.status == "completed" ? true : false;
 
     defer.resolve(moduleDetail);
   } catch (e) {
