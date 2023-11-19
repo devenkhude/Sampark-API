@@ -17,48 +17,53 @@ module.exports = {
 };
 
 async function getAllbyDepartmentSubject(departmentName, subjectName) {
-  let query = {};
-  if (departmentName !== "") {
-    query["department"] = departmentName;
-  }
-  if (subjectName !== "") {
-    query["subject"] = subjectName;
-  }
-  const concepts = await Conceptmaster.find(query);
-  let conceptList = [];
+  try {
+    const query = {};
 
-  concepts.forEach(async (element) => {
-    let concept = {};
+    if (departmentName !== "") {
+      query["department"] = departmentName;
+    }
 
-    concept["id"] = element["id"];
-    concept["name"] = element["name"];
-    concept["subject"] = element["subject"];
-    concept["department"] = element["department"];
+    if (subjectName !== "") {
+      query["subject"] = subjectName;
+    }
 
-    query["concept"] = element["id"];
+    const concepts = await Conceptmaster.find(query);
+    const conceptList = await Promise.all(
+      concepts.map(async (element) => {
+        const concept = {
+          id: element.id,
+          name: element.name,
+          subject: element.subject,
+          department: element.department,
+        };
 
-    const videos = await Video.find(query).select(
-      "id name thumbnail video_code"
+        query["concept"] = element.id;
+
+        const videos = await Video.find(query).select(
+          "id name thumbnail video_code"
+        );
+        const videoList = videos.map((elem) => {
+          const video = {
+            id: elem.id,
+            name: elem.name,
+            thumbnail:
+              elem.thumbnail !== "" && elem.thumbnail !== "null"
+                ? config.repositoryHost + elem.thumbnail
+                : `https://img.youtube.com/vi/${elem.video_code}/hqdefault.jpg`,
+          };
+          return video;
+        });
+
+        concept.videos = videoList;
+        return concept;
+      })
     );
-    let videoList = [];
-    videos.forEach((elem) => {
-      let video = {};
 
-      video["id"] = elem["id"];
-      video["name"] = elem["name"];
-      if (elem["thumbnail"] != "" && elem["thumbnail"] != "null") {
-        video["thumbnail"] = config.repositoryHost + elem["thumbnail"];
-      } else {
-        video["thumbnail"] =
-          "https://img.youtube.com/vi/" + elem["video_code"] + "/hqdefault.jpg";
-      }
-      videoList.push(video);
-    });
-    concept["videos"] = videoList;
-    conceptList.push(concept);
-  });
-
-  return conceptList;
+    return conceptList;
+  } catch (err) {
+    throw err;
+  }
 }
 
 async function getAll() {
