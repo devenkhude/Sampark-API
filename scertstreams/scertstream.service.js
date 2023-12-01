@@ -90,7 +90,7 @@ async function getVideos() {
       const publish_at = publishDate;
       const created_at = createdDate;
 
-      const scertstream = {
+      const scert = {
         stream_type,
         more_status,
         sub_title,
@@ -122,7 +122,7 @@ async function getVideos() {
           `https://img.youtube.com/vi/${youtube_code}/hqdefault.jpg`,
       };
 
-      return scertstream;
+      return scert;
     })
     .filter((scertstream) => scertstream !== null);
 
