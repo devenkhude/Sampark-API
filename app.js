@@ -11,6 +11,7 @@ const jwt = require("./_helpers/jwt");
 const deviceHandler = require("./_helpers/device");
 const errorHandler = require("./_helpers/error-handler");
 const commonMethod = require("./_helpers/commonmethods");
+const logger = require("./_helpers/logger");
 
 app.use(compression());
 app.use(fileUpload());
@@ -93,6 +94,14 @@ app.use((err, req, res, next) => {
     return res.status(500).json({ message: "Something went wrong" });
   }
 });
+
+(function() {
+  if (logger && logger.warn) {
+    logger.warn("Setting up winston logger");
+  } else {
+    console.log("Failed to setup winston logger");
+  }
+})
 
 const port =
   process.env.NODE_ENV === "production" ? process.env.PORT || 8081 : 8081;

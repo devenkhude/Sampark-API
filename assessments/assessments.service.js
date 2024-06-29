@@ -684,6 +684,8 @@ async function getAssessments(userParam) {
     endDate: { $gte: new Date() },
   };
 
+  console.log("Get Assessments Query: ", query);
+
   if (
     userParam.userType === "govt teacher" ||
     userParam.userType === "teacher"
@@ -702,6 +704,8 @@ async function getAssessments(userParam) {
   query.department = userParam.classId;
 
   let assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
+
+  console.log("Assessments: ", assessments, query);
 
   if (assessments.length === 0) {
     query.assessmentType = "Self";
@@ -809,6 +813,8 @@ async function getAssessments(userParam) {
       icon_active: config.assetHost + "big-allsubject.png",
     });
   }
+
+  console.log("Get Assessments final array: ", finalArray);
 
   return finalArray;
 }
