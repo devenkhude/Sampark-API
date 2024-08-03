@@ -1,3 +1,4 @@
+require('newrelic');
 const { Worker, isMainThread, parentPort } = require("worker_threads");
 const mongoose = require("mongoose");
 const config = require("./config.json");
