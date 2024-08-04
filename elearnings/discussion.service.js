@@ -57,25 +57,25 @@ async function discussions(course, discussionId, pageNo) {
           childComments: [],
         };
 
-        const childQuery = { parentComment: curComment.id };
+        const childQuery = { parentComment: curComment?.id };
         const dbChildComments = await Coursediscussion.find(childQuery)
           .populate("user", ["fullName", "image"])
           .sort({ createdDate: -1 })
           .limit(perPage);
 
         commentDetail.childComments = dbChildComments.map((dbChildComment) => ({
-          id: dbChildComment.id,
+          id: dbChildComment?.id,
           user: {
-            id: dbChildComment.user.id,
-            fullName: dbChildComment.user.fullName,
+            id: dbChildComment?.user?.id,
+            fullName: dbChildComment?.user?.fullName,
             image:
-              dbChildComment.user.image !== "" &&
-              dbChildComment.user.image !== null
-                ? config.repositoryHost + dbChildComment.user.image
-                : config.user_image,
+              dbChildComment?.user?.image !== "" &&
+              dbChildComment?.user?.image !== null
+                ? config?.repositoryHost + dbChildComment?.user?.image
+                : config?.user_image,
           },
-          comment: dbChildComment.comment,
-          createdDate: dbChildComment.createdDate,
+          comment: dbChildComment?.comment,
+          createdDate: dbChildComment?.createdDate,
         }));
 
         return commentDetail;
@@ -84,7 +84,7 @@ async function discussions(course, discussionId, pageNo) {
 
     return commentList;
   } catch (error) {
-    console.error(error);
+    console.log("Error in: ", error, "discussions");
     throw error;
   }
 }

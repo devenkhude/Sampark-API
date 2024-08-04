@@ -29,44 +29,51 @@ module.exports = {
 };
 
 async function users(req) {
-    if (req.query.date) {
-        let query = {};
-        query["is_new"] = false;
-        let monthdate = req.query.date; //.split("-");
+    try {
+        if (req?.query?.date) {
+            let query = {};
+            query["is_new"] = false;
+            let monthdate = req?.query?.date; //.split("-");
+    
+            let dateObj = new Date(monthdate);
+            let momentObj = moment(dateObj, 'YYYY-MM-DD');
+    
+            query['registrationDate'] = {};
+            query['registrationDate']['$gte'] = momentObj.startOf('day').toISOString();
+            query['registrationDate']['$lte'] = momentObj.endOf('day').toISOString();
 
-        let dateObj = new Date(monthdate);
-        let momentObj = moment(dateObj, 'YYYY-MM-DD');
-
-        query['registrationDate'] = {};
-        query['registrationDate']['$gte'] = momentObj.startOf('day').toISOString();
-        query['registrationDate']['$lte'] = momentObj.endOf('day').toISOString();
-
-        const users = await User.find(query).select("is_new is_verified is_active registrationDate createdDate fullName firstName lastName usertype phone_number location pincode empCode diseCode state district block cluster").populate("state","sf_state_id").populate("district","sf_district_id").populate("block","sf_block_id").populate("cluster","sf_cluster_id");
-        
-        var user_details = [];
-        for (const user of users) {
-          var user_detail = {};
-          user_detail["fullName"] = user.fullName;
-          user_detail["phone_number"] = user.phone_number;
-          user_detail["usertype"] = user.usertype;
-          user_detail["pincode"] = user.pincode;
-          user_detail["empCode"] = user.empCode;
-          user_detail["diseCode"] = user.diseCode;
-          user_detail["is_verified"] = user.is_verified;
-          user_detail["is_new"] = user.is_new;
-          user_detail["is_active"] = user.is_active;
-          user_detail["created_at"] = user.createdDate;
-          user_detail["registration_date"] = user.registrationDate;
-          user_detail["state_id"] = (user.state && user.state.sf_state_id) ? user.state.sf_state_id : 0;
-          user_detail["district_id"] = (user.district && user.district.sf_district_id) ? user.district.sf_district_id : 0;
-          user_detail["block_id"] = (user.block && user.block.sf_block_id) ? user.block.sf_block_id : 0;
-          user_detail["cluster_id"] = (user.cluster && user.cluster.sf_cluster_id) ? user.cluster.sf_cluster_id : 0;
-          
-          user_details.push(user_detail)
+            console.log("Query: ", query, "getUsers");
+    
+            const users = await User.find(query).select("is_new is_verified is_active registrationDate createdDate fullName firstName lastName usertype phone_number location pincode empCode diseCode state district block cluster").populate("state","sf_state_id").populate("district","sf_district_id").populate("block","sf_block_id").populate("cluster","sf_cluster_id");
+            console.log("Users: ", users, "getUsers");
+            const user_details = [];
+            for (const user of users) {
+              let user_detail = {};
+              user_detail["fullName"] = user?.fullName;
+              user_detail["phone_number"] = user?.phone_number;
+              user_detail["usertype"] = user?.usertype;
+              user_detail["pincode"] = user?.pincode;
+              user_detail["empCode"] = user?.empCode;
+              user_detail["diseCode"] = user?.diseCode;
+              user_detail["is_verified"] = user?.is_verified;
+              user_detail["is_new"] = user?.is_new;
+              user_detail["is_active"] = user?.is_active;
+              user_detail["created_at"] = user?.createdDate;
+              user_detail["registration_date"] = user?.registrationDate;
+              user_detail["state_id"] = (user?.state && user?.state?.sf_state_id) ? user?.state?.sf_state_id : 0;
+              user_detail["district_id"] = (user?.district && user?.district?.sf_district_id) ? user?.district?.sf_district_id : 0;
+              user_detail["block_id"] = (user?.block && user?.block?.sf_block_id) ? user?.block?.sf_block_id : 0;
+              user_detail["cluster_id"] = (user?.cluster && user?.cluster?.sf_cluster_id) ? user?.cluster?.sf_cluster_id : 0;
+              
+              user_details.push(user_detail)
+            }
+            console.log("User Details: ", user_details, "getUsers");
+            return user_details;
+        } else {
+            throw "Provide Date"
         }
-        return user_details;
-    } else {
-        throw "Provide Date"
+    } catch(error) {
+        console.log("Error in: ", error, "getUsers");
     }
 }
 
@@ -386,299 +393,332 @@ async function userstats(req) {
 }
 
 async function userlikes(req) {
-    if (req.query.date) { //checking if date is provided or not
-        let query = {};
-        let monthdate = req.query.date; //.split("-");
+    try {
+        if (req?.query?.date) { //checking if date is provided or not
+            let query = {};
+            let monthdate = req?.query?.date; //.split("-");
+    
+            let dateObj = new Date(monthdate);
+            let momentObj = moment(dateObj, 'YYYY-MM-DD');
+    
+            //creating condition for fetching records greater than the start of the provided date and less than the end of that date
+            query['user'] = {};
+            query['user']['$exists'] = true;
+            query['createdDate'] = {};
+            query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
+            query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
 
-        let dateObj = new Date(monthdate);
-        let momentObj = moment(dateObj, 'YYYY-MM-DD');
-
-        //creating condition for fetching records greater than the start of the provided date and less than the end of that date
-        query['user'] = {};
-        query['user']['$exists'] = true;
-        query['createdDate'] = {};
-        query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
-        query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
-        
-        //fetching image streams likes on provided date and related user phone number
-        const imagelikes = await Imagelike.find(query).populate('user','phone_number usertype');
-        //fetching text stream likes on provided date and related user phone number
-        const textlikes = await Textlike.find(query).populate('user','phone_number usertype');
-        //fetching video stream likes on provided date and related user phone number
-        const videolikes = await Videolike.find(query).populate('user','phone_number usertype');
-        //fetching smart shala video likes on provided date and related user phone number
-        const sssvideolikes = await Sssvideolike.find(query).populate('user','phone_number usertype');
-
-        let userstats = {};
-        for (const like of imagelikes) {
-            if (like['user'] && like['user']['phone_number']) {
-                let phonenumber = like['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0;
+            console.log("Query: ", query, "userLikes");
+            
+            //fetching image streams likes on provided date and related user phone number
+            const imagelikes = await Imagelike.find(query).populate('user','phone_number usertype');
+            //fetching text stream likes on provided date and related user phone number
+            const textlikes = await Textlike.find(query).populate('user','phone_number usertype');
+            //fetching video stream likes on provided date and related user phone number
+            const videolikes = await Videolike.find(query).populate('user','phone_number usertype');
+            //fetching smart shala video likes on provided date and related user phone number
+            const sssvideolikes = await Sssvideolike.find(query).populate('user','phone_number usertype');
+    
+            let userstats = {};
+            for (const like of imagelikes) {
+                if (like['user'] && like['user']['phone_number']) {
+                    let phonenumber = like['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0;
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const like of textlikes) {
-            if (like['user'] && like['user']['phone_number']) {
-                let phonenumber = like['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const like of textlikes) {
+                if (like['user'] && like['user']['phone_number']) {
+                    let phonenumber = like['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const like of videolikes) {
-            if (like['user'] && like['user']['phone_number']) {
-                let phonenumber = like['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const like of videolikes) {
+                if (like['user'] && like['user']['phone_number']) {
+                    let phonenumber = like['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const like of sssvideolikes) {
-            if (like['user'] && like['user']['phone_number']) {
-                let phonenumber = like['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const like of sssvideolikes) {
+                if (like['user'] && like['user']['phone_number']) {
+                    let phonenumber = like['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
+    
+            let return_data = {}
+            return_data['userstats'] = userstats;
+            console.log("User Stats: ", userstats, "userLikes");
+            return return_data;
+        } else {
+            throw "Provide Date"
         }
-
-        let return_data = {}
-        return_data['userstats'] = userstats;
-        return return_data;
-    } else {
-        throw "Provide Date"
+    } catch (error) {
+        console.log("Error in: ", error, "userLikes");
     }
 }
 
 async function usercomments(req) {
-    if (req.query.date) { //checking if date is provided or not
-        let query = {};
-        let monthdate = req.query.date; //.split("-");
-
-        let dateObj = new Date(monthdate);
-        let momentObj = moment(dateObj, 'YYYY-MM-DD');
-
-        //creating condition for fetching records greater than the start of the provided date and less than the end of that date
-        query['user'] = {};
-        query['user']['$exists'] = true;
-        query['createdDate'] = {};
-        query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
-        query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
-        
-        //fetching image stream comments done on provided date and related user phone number
-        const imagecomments = await Imagecomment.find(query).populate('user','phone_number usertype');
-        //fetching text stream comments done on provided date and related user phone number
-        const textcomments = await Textcomment.find(query).populate('user','phone_number usertype');
-        //fetching video stream comments done on provided date and related user phone number
-        const videocomments = await Videocomment.find(query).populate('user','phone_number usertype');
-        //fetching smart shala video comments done on provided date and related user phone number
-        const sssvideocomments = await Sssvideocomment.find(query).populate('user','phone_number usertype');
-        
-        let userstats = {};
-        for (const comment of imagecomments) {
-            if (comment['user'] && comment['user']['phone_number']) {
-                let phonenumber = comment['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+    try {
+        if (req?.query?.date) { //checking if date is provided or not
+            let query = {};
+            let monthdate = req?.query?.date; //.split("-");
+    
+            let dateObj = new Date(monthdate);
+            let momentObj = moment(dateObj, 'YYYY-MM-DD');
+    
+            //creating condition for fetching records greater than the start of the provided date and less than the end of that date
+            query['user'] = {};
+            query['user']['$exists'] = true;
+            query['createdDate'] = {};
+            query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
+            query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
+            console.log("Query: ", query, "userComments");
+            //fetching image stream comments done on provided date and related user phone number
+            const imagecomments = await Imagecomment.find(query).populate('user','phone_number usertype');
+            //fetching text stream comments done on provided date and related user phone number
+            const textcomments = await Textcomment.find(query).populate('user','phone_number usertype');
+            //fetching video stream comments done on provided date and related user phone number
+            const videocomments = await Videocomment.find(query).populate('user','phone_number usertype');
+            //fetching smart shala video comments done on provided date and related user phone number
+            const sssvideocomments = await Sssvideocomment.find(query).populate('user','phone_number usertype');
+            
+            let userstats = {};
+            for (const comment of imagecomments) {
+                if (comment['user'] && comment['user']['phone_number']) {
+                    let phonenumber = comment['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const comment of textcomments) {
-            if (comment['user'] && comment['user']['phone_number']) {
-                let phonenumber = comment['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const comment of textcomments) {
+                if (comment['user'] && comment['user']['phone_number']) {
+                    let phonenumber = comment['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const comment of videocomments) {
-            if (comment['user'] && comment['user']['phone_number']) {
-                let phonenumber = comment['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const comment of videocomments) {
+                if (comment['user'] && comment['user']['phone_number']) {
+                    let phonenumber = comment['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const comment of sssvideocomments) {
-            if (comment['user'] && comment['user']['phone_number']) {
-                let phonenumber = comment['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const comment of sssvideocomments) {
+                if (comment['user'] && comment['user']['phone_number']) {
+                    let phonenumber = comment['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
+            
+            let return_data = {}
+            return_data['userstats'] = userstats;
+            console.log("User Stats: ", userstats, "userComments");
+            return return_data;
+        } else {
+            throw "Provide Date"
         }
-        
-        let return_data = {}
-        return_data['userstats'] = userstats;
-        return return_data;
-    } else {
-        throw "Provide Date"
+    } catch(error) {
+        console.log("Error in: ", error, "userComments");
     }
 }
 
 async function userposts(req) {
-    if (req.query.date) { //checking if date is provided or not
-        let queryPosts = {};
-        let monthdate = req.query.date; //.split("-");
+    try {
+        if (req?.query?.date) { //checking if date is provided or not
+            let queryPosts = {};
+            let monthdate = req?.query?.date; //.split("-");
+    
+            let dateObj = new Date(monthdate);
+            let momentObj = moment(dateObj, 'YYYY-MM-DD');
+    
+            //creating condition for fetching records greater than the start of the provided date and less than the end of that date
+            queryPosts['author'] = {};
+            queryPosts['author']['$exists'] = true;
+            queryPosts['createdDate'] = {};
+            queryPosts['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
+            queryPosts['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
 
-        let dateObj = new Date(monthdate);
-        let momentObj = moment(dateObj, 'YYYY-MM-DD');
-
-        //creating condition for fetching records greater than the start of the provided date and less than the end of that date
-        queryPosts['author'] = {};
-        queryPosts['author']['$exists'] = true;
-        queryPosts['createdDate'] = {};
-        queryPosts['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
-        queryPosts['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
-        
-        //fetching image streams post created on provided date and related author phone number
-        const imagestreams = await Imagestream.find(queryPosts).populate('author','phone_number usertype');
-        //fetching text streams post created on provided date and related author phone number
-        const textstreams = await Textstream.find(queryPosts).populate('author','phone_number usertype');
-        //fetching video streams post created on provided date and related author phone number
-        const videostreams = await Videostream.find(queryPosts).populate('author','phone_number usertype');
-        
-        let userstats = {};
-        for (const stream of imagestreams) {
-            if (stream['author'] && stream['author']['phone_number']) {
-                let phonenumber = stream['author']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            console.log("Query: ", queryPosts, "userPosts");
+            
+            //fetching image streams post created on provided date and related author phone number
+            const imagestreams = await Imagestream.find(queryPosts).populate('author','phone_number usertype');
+            //fetching text streams post created on provided date and related author phone number
+            const textstreams = await Textstream.find(queryPosts).populate('author','phone_number usertype');
+            //fetching video streams post created on provided date and related author phone number
+            const videostreams = await Videostream.find(queryPosts).populate('author','phone_number usertype');
+            
+            let userstats = {};
+            for (const stream of imagestreams) {
+                if (stream['author'] && stream['author']['phone_number']) {
+                    let phonenumber = stream['author']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const stream of textstreams) {
-            if (stream['author'] && stream['author']['phone_number']) {
-                let phonenumber = stream['author']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const stream of textstreams) {
+                if (stream['author'] && stream['author']['phone_number']) {
+                    let phonenumber = stream['author']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const stream of videostreams) {
-            if (stream['author'] && stream['author']['phone_number']) {
-                let phonenumber = stream['author']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const stream of videostreams) {
+                if (stream['author'] && stream['author']['phone_number']) {
+                    let phonenumber = stream['author']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
+            
+            let return_data = {}
+            return_data['userstats'] = userstats;
+            console.log("User Stats: ", userstats, "userPosts");
+            return return_data;
+        } else {
+            throw "Provide Date"
         }
-        
-        let return_data = {}
-        return_data['userstats'] = userstats;
-        return return_data;
-    } else {
-        throw "Provide Date"
+    } catch (error) {
+        console.log("Error in: ", error, "userPosts");
     }
 }
 
 async function uservideos(req) {
-    if (req.query.date) { //checking if date is provided or not
-        let query = {};
-        let monthdate = req.query.date; //.split("-");
+    try {
+        if (req?.query?.date) { //checking if date is provided or not
+            let query = {};
+            let monthdate = req?.query?.date; //.split("-");
+    
+            let dateObj = new Date(monthdate);
+            let momentObj = moment(dateObj, 'YYYY-MM-DD');
+    
+            //creating condition for fetching records greater than the start of the provided date and less than the end of that date
+            query['user'] = {};
+            query['user']['$exists'] = true;
+            query['createdDate'] = {};
+            query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
+            query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
 
-        let dateObj = new Date(monthdate);
-        let momentObj = moment(dateObj, 'YYYY-MM-DD');
-
-        //creating condition for fetching records greater than the start of the provided date and less than the end of that date
-        query['user'] = {};
-        query['user']['$exists'] = true;
-        query['createdDate'] = {};
-        query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
-        query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
-        
-        //fetching video stream played on provided date and related user phone number
-        const videoplayeds = await Videoplayed.find(query).populate('user','phone_number usertype');
-        //fetching smart shala video played on provided date and related user phone number
-        const sssvideoplayeds = await Sssvideoplayed.find(query).populate('user','phone_number usertype');
-        
-        let userstats = {};
-        
-        for (const played of videoplayeds) {
-            if (played['user'] && played['user']['phone_number']) {
-                let phonenumber = played['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            console.log("Query: ", query, "userVideos");
+            
+            //fetching video stream played on provided date and related user phone number
+            const videoplayeds = await Videoplayed.find(query).populate('user','phone_number usertype');
+            //fetching smart shala video played on provided date and related user phone number
+            const sssvideoplayeds = await Sssvideoplayed.find(query).populate('user','phone_number usertype');
+            
+            let userstats = {};
+            
+            for (const played of videoplayeds) {
+                if (played['user'] && played['user']['phone_number']) {
+                    let phonenumber = played['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + parseInt(played['duration']);
                 }
-                userstats[phonenumber] = userstats[phonenumber] + parseInt(played['duration']);
             }
-        }
-        for (const played of sssvideoplayeds) {
-            if (played['user'] && played['user']['phone_number']) {
-                let phonenumber = played['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const played of sssvideoplayeds) {
+                if (played['user'] && played['user']['phone_number']) {
+                    let phonenumber = played['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + parseInt(played['duration']);
                 }
-                userstats[phonenumber] = userstats[phonenumber] + parseInt(played['duration']);
             }
+            
+            let return_data = {}
+            return_data['userstats'] = userstats;
+            console.log("User Stats: ", userstats, "userVideos");
+            return return_data;
+        } else {
+            throw "Provide Date"
         }
-        
-        let return_data = {}
-        return_data['userstats'] = userstats;
-        return return_data;
-    } else {
-        throw "Provide Date"
+    } catch(error) {
+        console.log("Error in: ", error, "userVideos");
     }
 }
 
 async function useritems(req) {
-    if (req.query.date) { //checking if date is provided or not
-        let query = {};
-        let monthdate = req.query.date; //.split("-");
+    try {
+        if (req?.query?.date) { //checking if date is provided or not
+            let query = {};
+            let monthdate = req?.query?.date; //.split("-");
+    
+            let dateObj = new Date(monthdate);
+            let momentObj = moment(dateObj, 'YYYY-MM-DD');
+    
+            //creating condition for fetching records greater than the start of the provided date and less than the end of that date
+            query['user'] = {};
+            query['user']['$exists'] = true;
+            query['createdDate'] = {};
+            query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
+            query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
 
-        let dateObj = new Date(monthdate);
-        let momentObj = moment(dateObj, 'YYYY-MM-DD');
-
-        //creating condition for fetching records greater than the start of the provided date and less than the end of that date
-        query['user'] = {};
-        query['user']['$exists'] = true;
-        query['createdDate'] = {};
-        query['createdDate']['$gte'] = momentObj.startOf('day').toISOString();
-        query['createdDate']['$lte'] = momentObj.endOf('day').toISOString();
-                
-        //fetching document views on provided date and related user phone number
-        const documentviews = await Documentviewed.find(query).populate('user','phone_number usertype');
-        //fetching scert solution views on provided date and related user phone number
-        const scertsolutionviews = await Scertsolutionviewed.find(query).populate('user','phone_number usertype');
-        
-        let userstats = {};
-        
-        for (const document of documentviews) {
-            if (document['user'] && document['user']['phone_number']) {
-                let phonenumber = document['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            console.log("Query: ", query, "userItems");
+                    
+            //fetching document views on provided date and related user phone number
+            const documentviews = await Documentviewed.find(query).populate('user','phone_number usertype');
+            //fetching scert solution views on provided date and related user phone number
+            const scertsolutionviews = await Scertsolutionviewed.find(query).populate('user','phone_number usertype');
+            
+            let userstats = {};
+            
+            for (const document of documentviews) {
+                if (document['user'] && document['user']['phone_number']) {
+                    let phonenumber = document['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
-        }
-        for (const document of scertsolutionviews) {
-            if (document['user'] && document['user']['phone_number']) {
-                let phonenumber = document['user']['phone_number'];
-                if (!userstats.hasOwnProperty(phonenumber)) {
-                    userstats[phonenumber] = 0
+            for (const document of scertsolutionviews) {
+                if (document['user'] && document['user']['phone_number']) {
+                    let phonenumber = document['user']['phone_number'];
+                    if (!userstats.hasOwnProperty(phonenumber)) {
+                        userstats[phonenumber] = 0
+                    }
+                    userstats[phonenumber] = userstats[phonenumber] + 1;
                 }
-                userstats[phonenumber] = userstats[phonenumber] + 1;
             }
+            
+            let return_data = {}
+            return_data['userstats'] = userstats;
+            console.log("User Stats: ", userstats, "userItems");
+            return return_data;
+        } else {
+            throw "Provide Date"
         }
-        
-        let return_data = {}
-        return_data['userstats'] = userstats;
-        return return_data;
-    } else {
-        throw "Provide Date"
+    } catch(error) {
+        console.log("Error in: ", error, "userItems");
     }
 }
 

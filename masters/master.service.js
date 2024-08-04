@@ -41,62 +41,83 @@ module.exports = {
 };
 
 async function getDesignations() {
-  const designations = await Designation.find();
-  return designations;
+  try {
+    const designations = await Designation.find();
+    return designations;
+  } catch(error) {
+    console.log("Error in: ", error, "getDestinations");
+  }
 }
 
 async function getStates() {
-  const states = await State.find({ is_active: true })
+  try {
+    const states = await State.find({ is_active: true })
     .sort({ name: 1 })
     .select("id name code short_name capital is_active");
   return states;
+  } catch(error) {
+    console.log("Error in: ", error, "getStates");
+  }
 }
 
 async function getDistricts(state_id) {
-  let query = {};
+  try {
+    let query = {};
 
-  if (state_id == "") {
-    throw new Error("Kindly provide State to get districts");
+    if (state_id == "") {
+      throw new Error("Kindly provide State to get districts");
+    }
+    query["state_id"] = state_id;
+    query["is_active"] = true;
+  
+    const districts = await District.find(query)
+      .sort({ name: 1 })
+      .select("id name code state_id sf_district_id is_active");
+    return districts;
+  } catch (error) {
+    console.log("Error in: ", error, "getDistricts");
   }
-  query["state_id"] = state_id;
-  query["is_active"] = true;
-
-  const districts = await District.find(query)
-    .sort({ name: 1 })
-    .select("id name code state_id sf_district_id is_active");
-  return districts;
+  
 }
 
 async function getBlocks(district_id) {
-  let query = {};
+  try {
+    let query = {};
 
-  if (district_id == "") {
-    throw new Error("Kindly provide District to get blocks");
+    if (district_id == "") {
+      throw new Error("Kindly provide District to get blocks");
+    }
+    query["district_id"] = district_id;
+    query["is_active"] = true;
+  
+    const blocks = await Block.find(query)
+      .sort({ name: 1 })
+      .select("id name state_id district_id sf_block_id is_active");
+    return blocks;
+  } catch(error) {
+    console.log("Error in: ", error, "getBlocks");
   }
-  query["district_id"] = district_id;
-  query["is_active"] = true;
-
-  const blocks = await Block.find(query)
-    .sort({ name: 1 })
-    .select("id name state_id district_id sf_block_id is_active");
-  return blocks;
 }
 
 async function getClusters(block_id) {
-  let query = {};
+  try {
+    let query = {};
 
-  if (block_id == "") {
-    throw new Error("Kindly provide Block to get clusters");
+    if (block_id == "") {
+      throw new Error("Kindly provide Block to get clusters");
+    }
+    query["block_id"] = block_id;
+    query["is_active"] = true;
+  
+    const clusters = await Cluster.find(query)
+      .sort({ name: 1 })
+      .select(
+        "id name code sf_cluster_id state_id district_id block_id is_active"
+      );
+    return clusters;
+  } catch (error) {
+    console.log("Error in: ", error, "getClusters");
   }
-  query["block_id"] = block_id;
-  query["is_active"] = true;
-
-  const clusters = await Cluster.find(query)
-    .sort({ name: 1 })
-    .select(
-      "id name code sf_cluster_id state_id district_id block_id is_active"
-    );
-  return clusters;
 }
 
 async function createState(req) {
@@ -286,34 +307,42 @@ async function createData(masterParam) {
 This API is to get predefined hash tags from master
 */
 async function getHashtags() {
-  const query = {
-    isActive: true,
-  };
-
-  const hashtags = await Hashtag.find(query).sort({ row: 1, name: 1 });
-
-  const finalArray = hashtags.map((hashtag) => ({
-    name: `#${hashtag.name}`,
-    row: hashtag.row,
-  }));
-
-  return finalArray;
+  try {
+    const query = {
+      isActive: true,
+    };
+  
+    const hashtags = await Hashtag.find(query).sort({ row: 1, name: 1 });
+  
+    const finalArray = hashtags.map((hashtag) => ({
+      name: `#${hashtag.name}`,
+      row: hashtag.row,
+    }));
+  
+    return finalArray;
+  } catch(error) {
+    console.log("Error in: ", error, "getHashTags");
+  }
 }
 
 /*
 This API is to get predefined caricatures from master
 */
 async function getCaricatures() {
-  const query = {
-    isActive: true,
-  };
-
-  const caricatures = await Caricature.find(query).sort({ path: 1 });
-
-  const finalArray = caricatures.map((caricature) => ({
-    fullPath: config.repositoryHost + caricature.path,
-    caricaturePath: caricature.path,
-  }));
-
-  return finalArray;
+  try {
+    const query = {
+      isActive: true,
+    };
+  
+    const caricatures = await Caricature.find(query).sort({ path: 1 });
+  
+    const finalArray = caricatures.map((caricature) => ({
+      fullPath: config.repositoryHost + caricature.path,
+      caricaturePath: caricature.path,
+    }));
+  
+    return finalArray;
+  } catch(error) {
+    console.log("Error in: ", error, "getCaricatures");
+  }
 }

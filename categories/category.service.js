@@ -13,11 +13,19 @@ module.exports = {
 };
 
 async function getAll() {
-    return await Category.find().select('-hash');
+    try {
+      return await Category.find().select('-hash');
+    } catch (error) {
+      console.log("Error in: ", error, "getAllCategories");
+    }
 }
 
 async function getById(id) {
+  try {
     return await Category.findById(id).select('-hash');
+  } catch (error) {
+    console.log("Error in: ", error, "getAllCategoryByID");
+  }
 }
 
 async function create(categoryParam) {

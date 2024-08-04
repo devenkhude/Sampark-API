@@ -17,23 +17,23 @@ module.exports = {
 };
 
 async function getAll() {
-    //limit(6).
-    //scertsolutions = await Scertsolution.find(query).populate('subject','name').populate('department','name').select('-hash');
-    scertsolutions = await Scertsolution.find().sort('createdDate desc');
+    try {
+      const scertsolutions = await Scertsolution.find().sort('createdDate desc');
     
-    scertsolutionList = [];
-    for(var i = 0; i < scertsolutions.length;i++){
-      
-      scertsolution = {};
-      scertsolution['id'] = scertsolutions[i]['id'];    
-      scertsolution['name'] = scertsolutions[i]['name'];    
-      scertsolution['states'] = scertsolutions[i]['states'];    
-      scertsolution['doc_url'] = config.repositoryHost+scertsolutions[i]['doc_url'];    
-            
-      scertsolutionList.push(scertsolution);
+      const scertsolutionList = [];
+      scertsolutions.forEach(element => {
+        let scertsolution = {};
+        scertsolution['id'] = element['id'];    
+        scertsolution['name'] = element['name'];    
+        scertsolution['states'] = element['states'];    
+        scertsolution['doc_url'] = config?.repositoryHost+element['doc_url'];    
+              
+        scertsolutionList.push(scertsolution);
+      });
+      return scertsolutionList;
+    } catch(error) {
+      console.log("Error in: ", error, "getAllScertSolution");
     }
-    return scertsolutionList;
-    //return await Scertsolution.find(query).populate('subject','name').populate('department','name').select('-hash');
 }
 
 
@@ -49,13 +49,17 @@ function randomno(length) {
 }
 
 async function getById(id, user) {
-    scertsolution = await Scertsolution.findById(id).select('-hash');
-    scertsolutiondetail = {};
+  try {
+    const scertsolution = await Scertsolution.findById(id).select('-hash');
+    let scertsolutiondetail = {};
     scertsolutiondetail['states'] = scertsolution['states'];    
     scertsolutiondetail['id'] = scertsolution['id'];
     scertsolutiondetail['name'] = scertsolution['name'];  
     scertsolutiondetail['doc_url'] = config.repositoryHost+scertsolution['doc_url'];      
     return scertsolutiondetail;
+  } catch(error) {
+    console.log("Error in: ", error, "getScertByID");
+  }
 }
 
 async function create(req) {

@@ -492,63 +492,103 @@ async function importExcelParents(req) {
 This API is to get classes and students by the given disecode
 */
 async function getClassesAndStudents(userParam) {
-  const query = {
-    isActive: true,
-    diseCode: userParam.disecode,
-  };
-
-  const queryAssess = {
-    isActive: true,
-    published: true,
-    startDate: { $lte: new Date() },
-    endDate: { $gte: new Date() },
-    type: { $in: ["MT"] },
-    assessmentType: "State",
-  };
-
-  if (userParam.stateId) {
-    queryAssess.states = { $in: [userParam.stateId] };
-  } else {
-    const checkSchool = await School.findOne({ diseCode: userParam.disecode });
-    if (checkSchool) {
-      const diseStateId = checkSchool.state.toString();
-      queryAssess.states = { $in: [diseStateId] };
+  try {
+    let query = {};
+    let queryAssess = {};
+    let finalArray = [];
+  
+    const forReport = userParam?.forReport;
+  
+    //To get active students based on disecode
+    query['isActive'] = true;
+    query['diseCode'] = userParam?.disecode;
+  
+    //To get assessments for logged in teachers state
+    queryAssess['isActive'] = true;
+    queryAssess['published'] = true;
+    queryAssess['startDate'] = { $lte: new Date() };
+    queryAssess['endDate'] = { $gte: new Date() };
+  
+    queryAssess['type'] = { '$in': ['MT'] };
+    queryAssess['assessmentType'] = 'State';
+  
+    if (Boolean(userParam.stateId)) {
+      let arrState = [];
+      arrState.push(userParam.stateId);
+      queryAssess['states'] = { '$in': arrState };
+    } else {
+      //Get state Id based on disecode
+      const checkSchool = await School.findOne({ "diseCode": userParam.disecode });
+      if (checkSchool) {
+        let diseStateId = checkSchool?.state?.toString();
+        let arrState = [];
+        arrState.push(diseStateId);
+        queryAssess['states'] = { '$in': arrState };
+      }
     }
-  }
-
-  const students = await Student.find(query).select("id childName department");
-  const departments = await Departmentmaster.find({ module: "sa" }).select(
-    "id name"
-  );
-
-  const finalArray = [];
-
-  for (const deptId in _.groupBy(students, "department")) {
-    const deptName = departments.find((dept) => dept.id === deptId);
-
-    if (deptName) {
-      const dbAssessments = await Assessment.find({
-        ...queryAssess,
-        department: deptId,
-      }).select("id");
-
-      const arrAssessIds = dbAssessments.map(
-        (element) => new objectId(element.id)
-      );
+    console.log("Query: ", queryAssess, "getClassesAndStudents");
+    const students = await Student.find(query).select('id childName department');
+    console.log("Students: ", students, "getClassesAndStudents");
+    //To get all claases for this sa module
+    const departments = await Departmentmaster.find({ module: 'sa' }).select('id name');
+    console.log("Departments: ", departments, "getClassesAndStudents");
+    //To do groupby on department of students received
+    const studentsGroupByClass = _.groupBy(students, 'department');
+  
+    //return studentsGroupByClass;
+  
+    //Loop through objects
+    for (let deptId in studentsGroupByClass) {
+      let classList = {};
+      const searchMask = ' ';
+      const regEx = new RegExp(searchMask, 'ig');
+      const replaceMask = '';
+  
+      //To get class name
+      const deptName = _.where(departments, { id: deptId });
+  
+      //Assigning required class info to a final object
+      classList['id'] = deptId;
+      classList['className'] = deptName[0]['name'];
+      classList['icon'] = config.assetHost + deptName[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
+      classList['icon_active'] = config.assetHost + 'big-' + deptName[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
+  
+      //To get total assessments count for this class
+      queryAssess['department'] = deptId;
+  
+      const dbAssessments = await Assessment.find(queryAssess).select('id');
+      console.log("Assessments: ", dbAssessments, "getClassesAndStudents");
+  
+      let arrAssessIds = [];
+  
+      if (dbAssessments && dbAssessments.length) {
+        dbAssessments.forEach(element => {
+          let dbAssessId = new objectId(element.id);
+          arrAssessIds.push(dbAssessId);
+        });
+      }
+  
       const totalTestCnt = arrAssessIds.length;
-
-      const studentsArr = [];
-      const arrStudentIds = _.groupBy(students, "department")[deptId].map(
-        (student) => new objectId(student.id)
-      );
-
+      classList['total_test_count'] = totalTestCnt;
+  
+      //Array of students and ids
+      let studentsArr = [];
+      let arrStudentIds = [];
+  
+      for (let studentIndex in studentsGroupByClass[deptId]) {
+        let studentInnerObj = studentsGroupByClass[deptId][studentIndex];
+        let dbStudentId = new objectId(studentInnerObj['id']);
+        arrStudentIds.push(dbStudentId);
+      }
+  
+      //To get count of tests attempted, stars and percentage for all students
       const progressRecords = await AssessmentStudentProgress.aggregate([
         {
           $match: {
             student: { $in: arrStudentIds },
             department: new objectId(deptId),
-            assessment: { $in: arrAssessIds },
-          },
+            assessment: { $in: arrAssessIds }
+          }
         },
         {
           $group: {
@@ -557,119 +597,131 @@ async function getClassesAndStudents(userParam) {
             totalStars: { $sum: "$countOfStar" },
             totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
             totalQuestionCnt: { $sum: "$totalQuestionCnt" },
-          },
-        },
-      ]);
+          }
+        }]);
 
-      for (const student of studentsArr) {
-        const matchingProgress = progressRecords.find(
-          (item) => String(item._id) === String(student.id)
-        );
-
-        student.test_attempted = matchingProgress
-          ? matchingProgress.testAttemptedCnt
-          : 0;
-        student.test_pending = totalTestCnt - student.test_attempted;
-
-        if (userParam.forReport) {
-          if (matchingProgress) {
-            const calcPercentage =
-              (matchingProgress.totalCorrectQuestionCnt /
-                matchingProgress.totalQuestionCnt) *
-              100;
-            student.totalPercentage = Number(calcPercentage.toFixed(2));
-            student.totalStars = matchingProgress.totalStars;
+        console.log("Progress Records: ", progressRecords, "getClassesAndStudents");
+  
+      //For all students get the required details
+      for (let studentIndex in studentsGroupByClass[deptId]) {
+        let studentInnerObj = studentsGroupByClass[deptId][studentIndex];
+  
+        //Each student as an object
+        let studentObj = {};
+  
+        studentObj['id'] = studentInnerObj['id'];
+        studentObj['name'] = studentInnerObj['childName'];
+  
+        let matchingProgress = _.filter(progressRecords, item => String(item._id) === String(studentInnerObj['id']));
+  
+        studentObj['test_attempted'] = matchingProgress.length ? matchingProgress[0]['testAttemptedCnt'] : 0;
+        studentObj['test_pending'] = totalTestCnt - studentObj['test_attempted'];
+  
+        //If its for childwise report get percentage and count of stars
+        if (forReport) {
+          if (matchingProgress.length) {
+            let calcPercentage = (matchingProgress[0]['totalCorrectQuestionCnt'] / matchingProgress[0]['totalQuestionCnt']) * 100
+            studentObj['totalPercentage'] = Number(calcPercentage.toFixed(2));
+            studentObj['totalStars'] = matchingProgress[0]['totalStars'];
           } else {
-            student.totalPercentage = null;
-            student.totalStars = null;
+            studentObj['totalPercentage'] = null;
+            studentObj['totalStars'] = null;
           }
         }
-
-        studentsArr.push(student);
+  
+        //Push each object to an array
+        studentsArr.push(studentObj);
       }
-
-      finalArray.push({
-        id: deptId,
-        className: deptName.name,
-        icon:
-          config.assetHost +
-          deptName.name.toLowerCase().replace(/\s+/g, "") +
-          ".png",
-        icon_active:
-          config.assetHost +
-          "big-" +
-          deptName.name.toLowerCase().replace(/\s+/g, "") +
-          ".png",
-        total_test_count: totalTestCnt,
-        students: studentsArr,
-      });
+  
+      //Push all students to final object
+      classList['students'] = studentsArr;
+  
+      //Assign final object to an array
+      finalArray.push(classList);
     }
+  
+    //Sort final array by class name
+    finalArray = _.sortBy(finalArray, 'className');
+    console.log("Final Array: ", finalArray, "getClassesAndStudents");
+    //return final array
+    return finalArray;
+  } catch (error) {
+    console.log("Error in: ", error, "getClassesAndStudents");
+    throw error;
   }
-
-  const sortedFinalArray = _.sortBy(finalArray, "className");
-
-  return sortedFinalArray;
 }
 
 async function getAssessmentClass(req) {
-  const departments = await Departmentmaster.find({ module: "sa" });
-  if (departments && departments.length) {
-    const departmentList = departments.map((element) => ({
-      icon:
-        (config.assetHost || "") +
-        element.name.toLowerCase().replace(/\s/gi, "") +
-        ".png",
-      icon_active:
-        (config.assetHost || "") +
-        "big-" +
-        element.name.toLowerCase().replace(/\s/gi, "") +
-        ".png",
-      id: element.id,
-      module: element.module,
-      name: element.name,
-    }));
-    return departmentList;
-  } else {
-    return [];
+  try {
+    const departments = await Departmentmaster.find({ module: "sa" });
+    console.log("Departments: ", departments, "getAssessmentClass");
+    if (departments && departments?.length) {
+      const departmentList = departments.map((element) => ({
+        icon:
+          (config?.assetHost || "") +
+          element?.name?.toLowerCase().replace(/\s/gi, "") +
+          ".png",
+        icon_active:
+          (config?.assetHost || "") +
+          "big-" +
+          element?.name?.toLowerCase().replace(/\s/gi, "") +
+          ".png",
+        id: element?.id,
+        module: element?.module,
+        name: element?.name,
+      }));
+      console.log("Department List: ", departmentList, "getAssessmentClass");
+      return departmentList;
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.log("Error in: ", error, "getAssessmentClass");
   }
 }
 
 async function registerStudent(req) {
-  if (req) {
-    if (req.diseCode && req.diseCode !== "") {
-      //To check if diseCode exists in db
-      var diseCodeCnt = await School.find({
-        diseCode: req.diseCode,
-      }).countDocuments();
-
-      if (!diseCodeCnt) {
-        throw "Dise Code does not exists in database";
+  try {
+    if (req) {
+      if (req?.diseCode && req?.diseCode !== "") {
+        //To check if diseCode exists in db
+        const diseCodeCnt = await School.find({
+          diseCode: req?.diseCode,
+        }).countDocuments();
+  
+        if (!diseCodeCnt) {
+          throw "Dise Code does not exists in database";
+        }
       }
-    }
-
-    try {
-      var studentDetail = req;
-      // only available disecode can be inserted in the db
-      const student = new Student({
-        parentMobile: studentDetail.parentMobile,
-        srnNo: studentDetail.SRNumber,
-        childName: studentDetail.name,
-        parentName: studentDetail.parentName,
-        diseCode: studentDetail.diseCode,
-        department: new objectId(studentDetail.department),
-        isActive: true,
-        createdDate: new Date(),
-        modifiedDate: new Date(),
-        createdBy: new objectId(studentDetail.createdBy),
-        modifiedBy: new objectId(studentDetail.createdBy),
-      });
-      await student.save();
-      return true;
-    } catch (e) {
+  
+      try {
+        const studentDetail = req;
+        // only available disecode can be inserted in the db
+        const student = new Student({
+          parentMobile: studentDetail?.parentMobile,
+          srnNo: studentDetail?.SRNumber,
+          childName: studentDetail?.name,
+          parentName: studentDetail?.parentName,
+          diseCode: studentDetail?.diseCode,
+          department: new objectId(studentDetail?.department),
+          isActive: true,
+          createdDate: new Date(),
+          modifiedDate: new Date(),
+          createdBy: new objectId(studentDetail?.createdBy),
+          modifiedBy: new objectId(studentDetail?.createdBy),
+        });
+        console.log("Student: ", student, "student");
+        await student.save();
+        return true;
+      } catch (e) {
+        console.log("Error in: ", e, "registerStudent");    
+        return false;
+      }
+    } else {
       return false;
     }
-  } else {
-    return false;
+  } catch (error) {
+    console.log("Error in: ", error, "registerStudent");
   }
 }
 
@@ -677,167 +729,179 @@ async function registerStudent(req) {
 This API is to get assessments by class for the selected student
 */
 async function getAssessments(userParam) {
-  let query = {
-    isActive: true,
-    published: true,
-    startDate: { $lte: new Date() },
-    endDate: { $gte: new Date() },
-  };
-
-  console.log("Get Assessments Query: ", query);
-
-  if (
-    userParam.userType === "govt teacher" ||
-    userParam.userType === "teacher"
-  ) {
-    query.type = { $in: ["MT"] };
-    query.assessmentType = "State";
-  } else {
-    query.type = { $in: ["HT"] };
-    query.assessmentType = "State";
-  }
-
-  if (userParam.stateId) {
-    query.states = { $in: ["all", userParam.stateId] };
-  }
-
-  query.department = userParam.classId;
-
-  let assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
-
-  console.log("Assessments: ", assessments, query);
-
-  if (assessments.length === 0) {
-    query.assessmentType = "Self";
-    assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
-  }
-
-  const Subjects = await Subjectmaster.find({ module: "sa" }).select("id name");
-  const assessmentsGroupByClass = _.groupBy(assessments, "subject");
-
-  let finalArray = [];
-
-  for (let subjectId in assessmentsGroupByClass) {
-    let assessmentList = {};
-    let subjectName = Subjects.find((subject) => subject.id === subjectId);
-
-    assessmentList.id = subjectId;
-    assessmentList.subjectName = subjectName?.name || "";
-    assessmentList.icon =
-      config.assetHost +
-      (subjectName?.name || "").toLowerCase().replace(/\s/gi, "") +
-      ".png";
-    assessmentList.icon_active =
-      config.assetHost +
-      "big-" +
-      (subjectName?.name || "").toLowerCase().replace(/\s/gi, "") +
-      ".png";
-
-    let assessArr = [];
-    let arrAssessIds = assessmentsGroupByClass[subjectId].map(
-      (assessInnerObj) => assessInnerObj.id
-    );
-
-    const progressRecords = await AssessmentStudentProgress.find({
-      department: userParam.classId,
-      subject: subjectId,
-      student: userParam.studentId,
-      assessment: { $in: arrAssessIds },
-    }).select(
-      "assessment correctQuestionCnt totalQuestionCnt countOfStar type"
-    );
-
-    for (let assessInnerObj of assessmentsGroupByClass[subjectId]) {
-      let assessObj = {
-        id: assessInnerObj.id,
-        name: assessInnerObj.lesson,
-        type: assessInnerObj.type,
-        suggestedVideos: [],
-        report: {},
-      };
-
-      if (assessInnerObj.suggestedVideos.length > 0) {
-        let suggestedVideosList = await Video.find({
-          _id: { $in: assessInnerObj.suggestedVideos },
-        });
-
-        assessObj.suggestedVideos = suggestedVideosList.map(
-          (suggestedVideoObject) => ({
-            name: suggestedVideoObject.name,
-            video_code: suggestedVideoObject.video_code,
-            url: suggestedVideoObject.url,
-            description: suggestedVideoObject.description,
-            thumbnail: config.repositoryHost + suggestedVideoObject.thumbnail,
-            height: suggestedVideoObject.height,
-            width: suggestedVideoObject.width,
-          })
-        );
-      }
-
-      let matchingProgress = progressRecords.filter(
-        (item) => String(item.assessment) === String(assessInnerObj.id)
+  try {
+    let query = {
+      isActive: true,
+      published: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+    };
+  
+    if (
+      userParam?.userType === "govt teacher" ||
+      userParam?.userType === "teacher"
+    ) {
+      query.type = { $in: ["MT"] };
+      query.assessmentType = "State";
+    } else {
+      query.type = { $in: ["HT"] };
+      query.assessmentType = "State";
+    }
+  
+    if (userParam?.stateId) {
+      query.states = { $in: ["all", userParam.stateId] };
+    }
+  
+    query.department = userParam?.classId;
+    console.log("Get Assessments Query: ", query, "getAssessments");
+    let assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
+  
+    console.log("Assessments: ", assessments, "getAssessments");
+  
+    if (assessments.length === 0) {
+      query.assessmentType = "Self";
+      assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
+      console.log("Assessments: ", assessments, "getAssessments");
+    }
+  
+    const Subjects = await Subjectmaster.find({ module: "sa" }).select("id name");
+    console.log("Subjects: ", Subjects, "getAssessments");
+    const assessmentsGroupByClass = _.groupBy(assessments, "subject");
+  
+    let finalArray = [];
+  
+    for (let subjectId in assessmentsGroupByClass) {
+      let assessmentList = {};
+      let subjectName = Subjects.find((subject) => subject.id === subjectId);
+  
+      assessmentList.id = subjectId;
+      assessmentList.subjectName = subjectName?.name || "";
+      assessmentList.icon =
+        config?.assetHost +
+        (subjectName?.name || "")?.toLowerCase().replace(/\s/gi, "") +
+        ".png";
+      assessmentList.icon_active =
+        config?.assetHost +
+        "big-" +
+        (subjectName?.name || "")?.toLowerCase().replace(/\s/gi, "") +
+        ".png";
+  
+      let assessArr = [];
+      let arrAssessIds = assessmentsGroupByClass[subjectId].map(
+        (assessInnerObj) => assessInnerObj?.id
+      );
+  
+      const progressRecords = await AssessmentStudentProgress.find({
+        department: userParam.classId,
+        subject: subjectId,
+        student: userParam.studentId,
+        assessment: { $in: arrAssessIds },
+      }).select(
+        "assessment correctQuestionCnt totalQuestionCnt countOfStar type"
       );
 
-      if (matchingProgress.length) {
-        let calcPercentage =
-          (matchingProgress[0].correctQuestionCnt /
-            matchingProgress[0].totalQuestionCnt) *
-          100;
-        assessObj.report.calculatedPercentage = Number(
-          calcPercentage.toFixed(2)
+      console.log("Progress Records: ", progressRecords, "getAssessments");
+  
+      for (let assessInnerObj of assessmentsGroupByClass[subjectId]) {
+        let assessObj = {
+          id: assessInnerObj?.id,
+          name: assessInnerObj?.lesson,
+          type: assessInnerObj?.type,
+          suggestedVideos: [],
+          report: {},
+        };
+  
+        if (assessInnerObj?.suggestedVideos?.length > 0) {
+          let suggestedVideosList = await Video.find({
+            _id: { $in: assessInnerObj?.suggestedVideos },
+          });
+  
+          assessObj.suggestedVideos = suggestedVideosList.map(
+            (suggestedVideoObject) => ({
+              name: suggestedVideoObject?.name,
+              video_code: suggestedVideoObject?.video_code,
+              url: suggestedVideoObject?.url,
+              description: suggestedVideoObject?.description,
+              thumbnail: config?.repositoryHost + suggestedVideoObject?.thumbnail,
+              height: suggestedVideoObject?.height,
+              width: suggestedVideoObject?.width,
+            })
+          );
+        }
+        console.log("Assessments Object: ", assessObj, "getAssessments");
+  
+        let matchingProgress = progressRecords.filter(
+          (item) => String(item.assessment) === String(assessInnerObj.id)
         );
-        assessObj.report.correctQuestionCnt =
-          matchingProgress[0].correctQuestionCnt;
-        assessObj.report.totalQuestionCnt =
-          matchingProgress[0].totalQuestionCnt;
-        assessObj.report.countOfStar = matchingProgress[0].countOfStar;
-        assessObj.report.type = matchingProgress[0].type;
-        assessObj.report.attemptedCnt = 1;
+  
+        if (matchingProgress.length) {
+          let calcPercentage =
+            (matchingProgress[0].correctQuestionCnt /
+              matchingProgress[0].totalQuestionCnt) *
+            100;
+          assessObj.report.calculatedPercentage = Number(
+            calcPercentage.toFixed(2)
+          );
+          assessObj.report.correctQuestionCnt =
+            matchingProgress[0].correctQuestionCnt;
+          assessObj.report.totalQuestionCnt =
+            matchingProgress[0].totalQuestionCnt;
+          assessObj.report.countOfStar = matchingProgress[0].countOfStar;
+          assessObj.report.type = matchingProgress[0].type;
+          assessObj.report.attemptedCnt = 1;
+        }
+  
+        assessObj.studentAnswers = [
+          { question: "Q1", selectedAnswer: "A", correctAnswer: "A" },
+        ];
+  
+        assessArr.push(assessObj);
       }
-
-      assessObj.studentAnswers = [
-        { question: "Q1", selectedAnswer: "A", correctAnswer: "A" },
-      ];
-
-      assessArr.push(assessObj);
+  
+      assessmentList.assessments = assessArr;
+      finalArray.push(assessmentList);
     }
-
-    assessmentList.assessments = assessArr;
-    finalArray.push(assessmentList);
+  
+    if (userParam.forReport && assessments.length) {
+      finalArray.push({
+        subjectName: "All Subject",
+        icon: config.assetHost + "allsubject.png",
+        icon_active: config.assetHost + "big-allsubject.png",
+      });
+    }
+  
+    console.log("Get Assessments final array: ", finalArray, "getAssessments");
+  
+    return finalArray;
+  } catch (error) {
+    console.log("Error in: ", error, "getAssessments");
   }
-
-  if (userParam.forReport && assessments.length) {
-    finalArray.push({
-      subjectName: "All Subject",
-      icon: config.assetHost + "allsubject.png",
-      icon_active: config.assetHost + "big-allsubject.png",
-    });
-  }
-
-  console.log("Get Assessments final array: ", finalArray);
-
-  return finalArray;
 }
 
 /*
 This API is to get questionwise report for the selected student and assessment
 */
 async function getQuesionwiseReport(userParam) {
-  const studentId = userParam.studentId;
-  const assessmentId = userParam.assessmentId;
-
-  const studentAnswers = await AssessmentStudentProgress.find({
-    student: studentId,
-    assessment: assessmentId,
-  }).select("answers");
-
-  const finalArray = studentAnswers.map((answer, index) => ({
-    question: `Q${index + 1}`,
-    selectedAnswer: answer.selectedAnswer,
-    correctAnswer: answer.correctAnswer,
-  }));
-
-  return finalArray;
+  try {
+    const studentId = userParam?.studentId;
+    const assessmentId = userParam?.assessmentId;
+  
+    const studentAnswers = await AssessmentStudentProgress.find({
+      student: studentId,
+      assessment: assessmentId,
+    }).select("answers");
+    console.log("Student Answers: ", studentAnswers, "getQuesionwiseReport");
+    const finalArray = studentAnswers.map((answer, index) => ({
+      question: `Q${index + 1}`,
+      selectedAnswer: answer?.selectedAnswer,
+      correctAnswer: answer?.correctAnswer,
+    }));
+    console.log("Get final array: ", finalArray, "getQuesionwiseReport");
+  
+    return finalArray;
+  } catch (error) {
+    console.log("Error in: ", error, "getQuesionwiseReport");
+  }
 }
 
 /*
@@ -845,19 +909,20 @@ This API is to get questions by assessment ids
 */
 async function getQuestions(userParam) {
   try {
-    const assessmentIds = userParam.assessmentIds.split(",");
+    const assessmentIds = userParam?.assessmentIds?.split(",");
     const arrAssessmentIds = assessmentIds.map(id => id.trim());
-  
+    console.log("Array Assessment ID's: ", arrAssessmentIds, "getQuestions");
     const query = {
       isActive: true,
       assessment: { $in: arrAssessmentIds }
     };
-  
+    console.log("Query: ", query, "getQuestions");
     const assessmentQuestions = await AssessmentQuestion.find(query);
+    console.log("Assessments Questions: ", assessmentQuestions, "getQuestions");
   
     const queryAssess = {
       isActive: true,
-      department: userParam.classId
+      department: userParam?.classId
     };
   
     const Assessments = await Assessment.find(queryAssess);
@@ -873,11 +938,11 @@ async function getQuestions(userParam) {
       const assessmentName = _.find(Assessments, { id: assessId });
   
       if (assessmentName) {
-        questionList.name = assessmentName.lesson;
-        questionList.level = assessmentName.level;
-        questionList.timeLimit = assessmentName.duration;
+        questionList.name = assessmentName?.lesson;
+        questionList.level = assessmentName?.level;
+        questionList.timeLimit = assessmentName?.duration;
   
-        const level = assessmentName.level;
+        const level = assessmentName?.level;
   
         const requiredCnt = Math.min(questionsGroupByAssessment[assessId].length, 21);
         questionList.displayQuestionsCnt = requiredCnt - 1;
@@ -891,20 +956,20 @@ async function getQuestions(userParam) {
   
         for (const questionInnerObj of questionsGroupByAssessment[assessId]) {
           const questionObj = {
-            id: questionInnerObj.id,
-            question: questionInnerObj.question,
-            sentence: questionInnerObj.sentence || "",
-            questionType: questionInnerObj.questionType || "objective",
-            optionType: questionInnerObj.optionType || "",
-            isAudioEnabled: questionInnerObj.isAudioEnabled || "",
-            options: questionInnerObj.options,
-            question_image: questionInnerObj.question_image
-              ? config.repositoryHost + questionInnerObj.question_image
+            id: questionInnerObj?.id,
+            question: questionInnerObj?.question,
+            sentence: questionInnerObj?.sentence || "",
+            questionType: questionInnerObj?.questionType || "objective",
+            optionType: questionInnerObj?.optionType || "",
+            isAudioEnabled: questionInnerObj?.isAudioEnabled || "",
+            options: questionInnerObj?.options,
+            question_image: questionInnerObj?.question_image
+              ? config.repositoryHost + questionInnerObj?.question_image
               : "",
-            options_image: _.mapValues(questionInnerObj.options_image || {}, img =>
-              img ? config.repositoryHost + img : ""
+            options_image: _.mapValues(questionInnerObj?.options_image || {}, img =>
+              img ? config?.repositoryHost + img : ""
             ),
-            correctAnswer: questionInnerObj.correctAnswer
+            correctAnswer: questionInnerObj?.correctAnswer
           };
   
           if (questionObj.questionType === "ml-b") {
@@ -915,8 +980,8 @@ async function getQuestions(userParam) {
   
           questionArr.push(questionObj);
         }
-  
-        if (userParam.type === "PT") {
+        console.log("Questions Array: ", questionArr, "getQuestions");
+        if (userParam?.type === "PT") {
           questionList.questions = questionArr.slice(0, questionList.displayQuestionsCnt);
         } else {
           questionList.questions = questionArr;
@@ -925,10 +990,10 @@ async function getQuestions(userParam) {
         finalArray.push(questionList);
       }
     }
-  
+    console.log("Final Array: ", finalArray, "getQuestions");
     return finalArray;
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getQuestions");
   }  
 }
 
@@ -1107,264 +1172,292 @@ async function saveAssessmentResultsForPT(arrAssessDetails) {
 This API is to get assessments for Paper Test
 */
 async function getAssessmentsForPT(userParam) {
-  const query = {
-    isActive: true,
-    published: true,
-    startDate: { $lte: new Date() },
-    endDate: { $gte: new Date() },
-    type: { $in: ["PT"] },
-    assessmentType: "State",
-  };
-
-  if (userParam.stateId) {
-    query.states = { $in: ["all", userParam.stateId] };
-  }
-
-  const assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
-
-  const Subjects = await Subjectmaster.find({ module: "sa" }).select("id name");
-  const Departments = await Departmentmaster.find({ module: "sa" }).select(
-    "id name"
-  );
-
-  const regEx = new RegExp("", "ig");
-  const replaceMask = "";
-
-  const finalArray = [];
-
-  for (let subjectId in _.groupBy(assessments, "subject")) {
-    const assessmentSubjectList = {};
-    const subjectName = _.find(Subjects, { id: subjectId });
-
-    assessmentSubjectList.subjectId = subjectId;
-    assessmentSubjectList.subjectName = subjectName?.name || "";
-    assessmentSubjectList.icon =
-      config.assetHost +
-      (subjectName?.name || "").toLowerCase().replace(regEx, replaceMask) +
-      ".png";
-    assessmentSubjectList.icon_active =
-      config.assetHost +
-      "big-" +
-      (subjectName?.name || "").toLowerCase().replace(regEx, replaceMask) +
-      ".png";
-
-    const assessmentsGroupByClass = _.groupBy(
-      assessments.filter((assess) => assess.subject === subjectId),
-      "department"
-    );
-
-    const assessmentClassArr = [];
-
-    for (let deptId in assessmentsGroupByClass) {
-      const assessmentClassList = {};
-      const className = _.find(Departments, { id: deptId });
-
-      assessmentClassList.classId = deptId;
-      assessmentClassList.className = className?.name || "";
-      assessmentClassList.icon =
-        config.assetHost +
-        (className?.name || "").toLowerCase().replace(regEx, replaceMask) +
-        ".png";
-      assessmentClassList.icon_active =
-        config.assetHost +
-        "big-" +
-        (className?.name || "").toLowerCase().replace(regEx, replaceMask) +
-        ".png";
-
-      const assessArr = assessmentsGroupByClass[deptId].map(
-        (assessInnerObj) => ({
-          id: assessInnerObj.id,
-          name: assessInnerObj.lesson,
-          type: assessInnerObj.type,
-        })
-      );
-
-      const arrAssessIds = assessArr.map((assessObj) => assessObj.id);
-
-      const dbStudents = await Student.find({
-        department: deptId,
-        diseCode: userParam.diseCode,
-        isActive: true,
-      });
-
-      const arrStudentIds = dbStudents.map(
-        (element) => new objectId(element.id)
-      );
-
-      const dbStudentsCnt = arrStudentIds.length;
-
-      const completedCnt = await AssessmentStudentProgress.find({
-        type: "PT",
-        department: deptId,
-        subject: subjectId,
-        student: { $in: arrStudentIds },
-        assessment: { $in: arrAssessIds },
-      }).countDocuments();
-
-      assessmentClassList.pendingCnt =
-        dbStudentsCnt * assessArr.length - completedCnt;
-      assessmentClassList.assessments = assessArr;
-
-      assessmentClassArr.push(assessmentClassList);
+  try {
+    const query = {
+      isActive: true,
+      published: true,
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+      type: { $in: ["PT"] },
+      assessmentType: "State",
+    };
+    
+    if (userParam?.stateId) {
+      query.states = { $in: ["all", userParam?.stateId] };
     }
 
-    assessmentClassArr.sort((a, b) => a.className.localeCompare(b.className));
-
-    assessmentSubjectList.classes = assessmentClassArr;
-    finalArray.push(assessmentSubjectList);
+    console.log("Query: ", query, "getAssessmentsForPT");
+  
+    const assessments = await Assessment.find(query).sort({ chapterNumber: 1 });
+    console.log("Assessments: ", assessments, "getAssessmentsForPT");
+  
+    const Subjects = await Subjectmaster.find({ module: "sa" }).select("id name");
+    console.log("Subject: ", Subjects, "getAssessmentsForPT");
+    const Departments = await Departmentmaster.find({ module: "sa" }).select(
+      "id name"
+    );
+    console.log("Departments: ", Departments, "getAssessmentsForPT");
+    const regEx = new RegExp("", "ig");
+    const replaceMask = "";
+  
+    const finalArray = [];
+  
+    for (let subjectId in _.groupBy(assessments, "subject")) {
+      const assessmentSubjectList = {};
+      const subjectName = _.find(Subjects, { id: subjectId });
+  
+      assessmentSubjectList.subjectId = subjectId;
+      assessmentSubjectList.subjectName = subjectName?.name || "";
+      assessmentSubjectList.icon =
+        config?.assetHost +
+        (subjectName?.name || "").toLowerCase().replace(regEx, replaceMask) +
+        ".png";
+      assessmentSubjectList.icon_active =
+        config?.assetHost +
+        "big-" +
+        (subjectName?.name || "").toLowerCase().replace(regEx, replaceMask) +
+        ".png";
+  
+      const assessmentsGroupByClass = _.groupBy(
+        assessments.filter((assess) => assess?.subject === subjectId),
+        "department"
+      );
+  
+      const assessmentClassArr = [];
+  
+      for (let deptId in assessmentsGroupByClass) {
+        const assessmentClassList = {};
+        const className = _.find(Departments, { id: deptId });
+  
+        assessmentClassList.classId = deptId;
+        assessmentClassList.className = className?.name || "";
+        assessmentClassList.icon =
+          config?.assetHost +
+          (className?.name || "").toLowerCase().replace(regEx, replaceMask) +
+          ".png";
+        assessmentClassList.icon_active =
+          config?.assetHost +
+          "big-" +
+          (className?.name || "").toLowerCase().replace(regEx, replaceMask) +
+          ".png";
+  
+        const assessArr = assessmentsGroupByClass[deptId].map(
+          (assessInnerObj) => ({
+            id: assessInnerObj?.id,
+            name: assessInnerObj?.lesson,
+            type: assessInnerObj?.type,
+          })
+        );
+  
+        const arrAssessIds = assessArr.map((assessObj) => assessObj?.id);
+  
+        const dbStudents = await Student.find({
+          department: deptId,
+          diseCode: userParam?.diseCode,
+          isActive: true,
+        });
+  
+        const arrStudentIds = dbStudents.map(
+          (element) => new objectId(element?.id)
+        );
+  
+        const dbStudentsCnt = arrStudentIds?.length;
+  
+        const completedCnt = await AssessmentStudentProgress.find({
+          type: "PT",
+          department: deptId,
+          subject: subjectId,
+          student: { $in: arrStudentIds },
+          assessment: { $in: arrAssessIds },
+        }).countDocuments();
+  
+        assessmentClassList.pendingCnt =
+          dbStudentsCnt * assessArr.length - completedCnt;
+        assessmentClassList.assessments = assessArr;
+  
+        assessmentClassArr.push(assessmentClassList);
+      }
+  
+      assessmentClassArr.sort((a, b) => a.className.localeCompare(b.className));
+  
+      assessmentSubjectList.classes = assessmentClassArr;
+      finalArray.push(assessmentSubjectList);
+    }
+    console.log("Final Array: ", finalArray, "getAssessmentsForPT");
+    return finalArray;
+  } catch (error) {
+    console.log("Error in: ", error, "getAssessmentsForPT");
   }
-
-  return finalArray;
 }
 
 /*
 This API is to get students for the given class and disecode
 */
 async function getClassStudents(userParam) {
-  const diseCode = userParam.diseCode;
-  const classId = userParam.departmentId;
-  const assessId = userParam.assessmentId;
-
-  const dbStudents = await Student.find({
-    department: classId,
-    diseCode: diseCode,
-    isActive: true,
-  });
-
-  const arrStudentIds = dbStudents.map((element) => new objectId(element.id));
-
-  const progressRecords = await AssessmentStudentProgress.find({
-    student: { $in: arrStudentIds },
-    assessment: assessId,
-    department: classId,
-    type: "PT",
-  }).select("student correctQuestionCnt");
-
-  const students = dbStudents.map((element) => {
-    const matchingProgress = progressRecords.find(
-      (item) => String(item.student) === String(element.id)
-    );
-    const correctQuestionCnt = matchingProgress
-      ? matchingProgress.correctQuestionCnt
-      : null;
-
-    return {
-      id: element.id,
-      SRNumber: element.srnNo,
-      Name: element.childName,
-      diseCode: element.diseCode,
-      parentName: element.parentName,
-      department: element.department,
-      correctQuestionCnt: correctQuestionCnt,
-    };
-  });
-
-  return students;
+  try {
+    const diseCode = userParam?.diseCode;
+    const classId = userParam?.departmentId;
+    const assessId = userParam?.assessmentId;
+  
+    const dbStudents = await Student.find({
+      department: classId,
+      diseCode: diseCode,
+      isActive: true,
+    });
+  
+    console.log("DB Students: ", dbStudents, "getClassStudents");
+    const arrStudentIds = dbStudents.map((element) => new objectId(element?.id));
+  
+    const progressRecords = await AssessmentStudentProgress.find({
+      student: { $in: arrStudentIds },
+      assessment: assessId,
+      department: classId,
+      type: "PT",
+    }).select("student correctQuestionCnt");
+    console.log("Progress Records: ", progressRecords, "getClassStudents");
+  
+    const students = dbStudents.map((element) => {
+      const matchingProgress = progressRecords.find(
+        (item) => String(item.student) === String(element.id)
+      );
+      const correctQuestionCnt = matchingProgress
+        ? matchingProgress?.correctQuestionCnt
+        : null;
+  
+      return {
+        id: element?.id,
+        SRNumber: element?.srnNo,
+        Name: element?.childName,
+        diseCode: element?.diseCode,
+        parentName: element?.parentName,
+        department: element?.department,
+        correctQuestionCnt: correctQuestionCnt,
+      };
+    });
+    console.log("Students: ", students, "getClassStudents")
+    return students;
+  } catch (error) {
+    console.log("Error in: ", error, "getClassStudents");
+  }
 }
 
 /*
 This API is to get children for the given parent mobile and srn number
 */
 async function getChildrenForParent(userParam) {
-  const students = [];
-  const query = {};
-  const srnNo = userParam.srnNo;
-  const mobile = userParam.mobile;
-  const assessmentType = userParam.assessmentType;
+  try {
+    const students = [];
+    const query = {};
+    const srnNo = userParam?.srnNo;
+    const mobile = userParam?.mobile;
+    const assessmentType = userParam?.assessmentType;
+  
+    const Departments = await Departmentmaster.find({ module: "sa" }).select(
+      "id name"
+    );
 
-  const Departments = await Departmentmaster.find({ module: "sa" }).select(
-    "id name"
-  );
+    console.log("Departments: ", Departments, "getChildrenForParent");
+  
+    let dbStudents;
+  
+    if (srnNo) {
+      dbStudents = await Student.find({ srnNo, isActive: true });
+    } else if (mobile) {
+      dbStudents = await Student.find({ parentMobile: mobile, isActive: true });
+    } else if (srnNo && mobile) {
+      dbStudents = await Student.find({
+        srnNo,
+        parentMobile: mobile,
+        isActive: true,
+      });
+    }
 
-  let dbStudents;
+    console.log("DB Students: ", dbStudents, "getChildrenForParent");
+  
+    query.isActive = true;
+    query.published = true;
+    query.startDate = { $lte: new Date() };
+    query.endDate = { $gte: new Date() };
+    query.type = { $in: ["HT"] };
+  
+    if (assessmentType) query.assessmentType = assessmentType;
+  
+    if (userParam.stateId) {
+      query.states = { $in: [userParam.stateId] };
+    }
 
-  if (srnNo) {
-    dbStudents = await Student.find({ srnNo, isActive: true });
-  } else if (mobile) {
-    dbStudents = await Student.find({ parentMobile: mobile, isActive: true });
-  } else if (srnNo && mobile) {
-    dbStudents = await Student.find({
-      srnNo,
-      parentMobile: mobile,
-      isActive: true,
-    });
-  }
+    console.log("Query: ", query, "getChildrenForParent");
+  
+    const dbAssessments = await Assessment.find(query);
 
-  query.isActive = true;
-  query.published = true;
-  query.startDate = { $lte: new Date() };
-  query.endDate = { $gte: new Date() };
-  query.type = { $in: ["HT"] };
-
-  if (assessmentType) query.assessmentType = assessmentType;
-
-  if (userParam.stateId) {
-    query.states = { $in: [userParam.stateId] };
-  }
-
-  const dbAssessments = await Assessment.find(query);
-
-  const arrAssessIds = dbAssessments.map((element) => new objectId(element.id));
-  const arrStudentIds = dbStudents.map((element) => new objectId(element.id));
-
-  const progressRecords = await AssessmentStudentProgress.aggregate([
-    {
-      $match: {
-        student: { $in: arrStudentIds },
-        assessment: { $in: arrAssessIds },
-        type: "HT",
+    console.log("Db Assessments: ", dbAssessments, "getChildrenForParent");
+  
+    const arrAssessIds = dbAssessments.map((element) => new objectId(element.id));
+    const arrStudentIds = dbStudents.map((element) => new objectId(element.id));
+  
+    const progressRecords = await AssessmentStudentProgress.aggregate([
+      {
+        $match: {
+          student: { $in: arrStudentIds },
+          assessment: { $in: arrAssessIds },
+          type: "HT",
+        },
       },
-    },
-    {
-      $group: {
-        _id: "$student",
-        totalStars: { $sum: "$countOfStar" },
-        totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
-        totalQuestionCnt: { $sum: "$totalQuestionCnt" },
+      {
+        $group: {
+          _id: "$student",
+          totalStars: { $sum: "$countOfStar" },
+          totalCorrectQuestionCnt: { $sum: "$correctQuestionCnt" },
+          totalQuestionCnt: { $sum: "$totalQuestionCnt" },
+        },
       },
-    },
-  ]);
+    ]);
 
-  if (dbStudents && dbStudents.length) {
-    dbStudents.forEach((element) => {
-      const studentObj = {};
-      const deptId = element.department.toString();
-      studentObj.id = element.id;
-      studentObj.SRNumber = element.srnNo;
-      studentObj.Name = element.childName;
-      studentObj.diseCode = element.diseCode;
-      studentObj.parentName = element.parentName;
-      studentObj.department = deptId;
-
-      const className = Departments.find((dept) => dept.id === deptId);
-      studentObj.className = className?.name || "";
-
-      const matchingProgress = progressRecords.find(
-        (item) => String(item._id) === String(element.id)
-      );
-
-      if (matchingProgress) {
-        const calcPercentage =
-          (matchingProgress.totalCorrectQuestionCnt /
-            matchingProgress.totalQuestionCnt) *
-          100;
-        studentObj.totalPercentage = Number(calcPercentage.toFixed(2));
-        studentObj.totalCorrectQuestionCnt =
-          matchingProgress.totalCorrectQuestionCnt;
-        studentObj.totalQuestionCnt = matchingProgress.totalQuestionCnt;
-        studentObj.totalStars = matchingProgress.totalStars;
-      } else {
-        studentObj.totalPercentage = 0;
-        studentObj.totalCorrectQuestionCnt = 0;
-        studentObj.totalQuestionCnt = 0;
-        studentObj.totalStars = 0;
-      }
-
-      students.push(studentObj);
-    });
+    console.log("Progress Records: ", progressRecords, "getChildrenForParent");
+  
+    if (dbStudents && dbStudents?.length) {
+      dbStudents.forEach((element) => {
+        const studentObj = {};
+        const deptId = element?.department?.toString();
+        studentObj.id = element?.id;
+        studentObj.SRNumber = element?.srnNo;
+        studentObj.Name = element?.childName;
+        studentObj.diseCode = element?.diseCode;
+        studentObj.parentName = element?.parentName;
+        studentObj.department = deptId;
+  
+        const className = Departments.find((dept) => dept.id === deptId);
+        studentObj.className = className?.name || "";
+  
+        const matchingProgress = progressRecords.find(
+          (item) => String(item._id) === String(element?.id)
+        );
+  
+        if (matchingProgress) {
+          const calcPercentage =
+            (matchingProgress.totalCorrectQuestionCnt /
+              matchingProgress.totalQuestionCnt) *
+            100;
+          studentObj.totalPercentage = Number(calcPercentage.toFixed(2));
+          studentObj.totalCorrectQuestionCnt =
+            matchingProgress.totalCorrectQuestionCnt;
+          studentObj.totalQuestionCnt = matchingProgress.totalQuestionCnt;
+          studentObj.totalStars = matchingProgress.totalStars;
+        } else {
+          studentObj.totalPercentage = 0;
+          studentObj.totalCorrectQuestionCnt = 0;
+          studentObj.totalQuestionCnt = 0;
+          studentObj.totalStars = 0;
+        }
+  
+        students.push(studentObj);
+      });
+    }
+    console.log("Students: ", students, "getChildrenForParent");
+    return students;
+  } catch (error) {
+    console.log("Error in: ", error, "getChildrenForParent");
   }
-
-  return students;
 }
 
 /*
@@ -1372,21 +1465,22 @@ This API is to get students wise reward details
 */
 async function getRewardDetails(userParam) {
   try {
-    const userId = userParam.user;
+    const userId = userParam?.user;
   
     if (!userId) {
       throw new Error("Invalid input");
     }
   
     const rewardList = await Reward.find({ user: userId, isActive: true }).populate("videoStory");
-  
+    console.log("Reward List: ", rewardList, "getRewardDetails");
     rewardList.forEach(item => {
-      if (item.videoStory) {
-        item.videoStory.thumbnail = config.repositoryHost + item.videoStory.thumbnail;
+      if (item?.videoStory) {
+        item?.videoStory?.thumbnail = config?.repositoryHost + item?.videoStory?.thumbnail;
       }
     });
   
     const userPoints = await User.findById(userId).select("totalPointsEarned");
+    console.log("User Points: ", userPoints, "getRewardDetails");
     const totalPointsEarned = userPoints ? userPoints.totalPointsEarned : 0;
   
     return {
@@ -1396,6 +1490,7 @@ async function getRewardDetails(userParam) {
       statusCode: 200
     };
   } catch (error) {
+    console.log("Error in: ", error, "getRewardDetails");
     throw error;
   }  
 }
@@ -1405,52 +1500,54 @@ This API is to get Sampark Smart Shala assessment
 */
 async function getSSSAssessment(userparam) {
   try {
-    if (!userparam.assessmentId) {
+    if (!userparam?.assessmentId) {
       throw new Error("Invalid input");
     }
   
-    const arrAssessmentIds = [userparam.assessmentId];
+    const arrAssessmentIds = [userparam?.assessmentId];
     const query = {
       isActive: true,
       assessment: { $in: arrAssessmentIds }
     };
-  
+    console.log("Query: ", query, "getSSSAssessment");
     const assessmentQuestions = await AssessmentQuestion.find(query);
+    console.log("Questions: ", assessmentQuestions, "getSSSAssessment");
     const Assessments = await Assessment.find({ isActive: true });
+    console.log("Assessments: ", Assessments, "getSSSAssessment");
     const questionsGroupByAssessment = _.groupBy(assessmentQuestions, "assessment");
   
     const finalArray = Object.entries(questionsGroupByAssessment).map(([assessId, questionsGroup]) => {
-      const assessmentName = Assessments.find(assessment => assessment.id === assessId);
+      const assessmentName = Assessments.find(assessment => assessment?.id === assessId);
   
       const questionList = {
         id: assessId,
-        name: assessmentName.lesson,
-        level: assessmentName.level,
-        timeLimit: assessmentName.duration,
-        displayQuestionsCnt: Math.min(questionsGroup.length, 21) - 1,
+        name: assessmentName?.lesson,
+        level: assessmentName?.level,
+        timeLimit: assessmentName?.duration,
+        displayQuestionsCnt: Math.min(questionsGroup?.length, 21) - 1,
         instructions: {
           rules: [
             "You have to score over 80% to complete this module successfully.",
             "You will get 3 Lifelines.",
-            `Maximum time taken should be ${assessmentName.duration} minutes.`
+            `Maximum time taken should be ${assessmentName?.duration} minutes.`
           ],
           point_system: [
-            `+${(assessmentName.maxMarks || assessmentName.displayQuestionsCnt) / questionList.displayQuestionsCnt.toFixed(1)} for each correct answer.`,
+            `+${(assessmentName.maxMarks || assessmentName?.displayQuestionsCnt) / questionList?.displayQuestionsCnt?.toFixed(1)} for each correct answer.`,
             "Each unused Lifelines earn you 5 points.",
             "If you complete the quiz within stipulated time, you earn 5 points."
           ]
         },
-        questions: questionsGroup.slice(0, questionList.displayQuestionsCnt).map(questionInnerObj => {
+        questions: questionsGroup?.slice(0, questionList?.displayQuestionsCnt).map(questionInnerObj => {
           const questionObj = {
-            id: questionInnerObj.id,
-            question: questionInnerObj.question,
-            sentence: questionInnerObj.sentence || "",
-            questionType: questionInnerObj.questionType || "objective",
-            optionType: questionInnerObj.optionType || "",
-            isAudioEnabled: questionInnerObj.isAudioEnabled || "",
+            id: questionInnerObj?.id,
+            question: questionInnerObj?.question,
+            sentence: questionInnerObj?.sentence || "",
+            questionType: questionInnerObj?.questionType || "objective",
+            optionType: questionInnerObj?.optionType || "",
+            isAudioEnabled: questionInnerObj?.isAudioEnabled || "",
             options: {},
-            question_image: questionInnerObj.question_image
-              ? config.repositoryHost + questionInnerObj.question_image
+            question_image: questionInnerObj?.question_image
+              ? config?.repositoryHost + questionInnerObj?.question_image
               : "",
             options_image: {}
           };
@@ -1459,8 +1556,8 @@ async function getSSSAssessment(userparam) {
             questionInnerObj.questionType === "fbtt" ||
             questionInnerObj.questionType === "dd1"
           ) {
-            const options = Object.values(questionInnerObj.options || {});
-            const correctAnswers = Object.values(questionInnerObj.correctAnswer || {});
+            const options = Object.values(questionInnerObj?.options || {});
+            const correctAnswers = Object.values(questionInnerObj?.correctAnswer || {});
             const finalOptions = options.concat(correctAnswers).filter((elem, pos, arr) => arr.indexOf(elem) === pos);
   
             finalOptions.forEach((option, i) => {
@@ -1518,17 +1615,18 @@ async function getSSSAssessment(userparam) {
             questionInnerObj.correctAnswer[correctAnswerKey] = correctAnswerKey;
           }
           questionObj.correctAnswer = questionInnerObj.correctAnswer;
+          console.log("Question Object: ", questionObj, "getSSSAssessment");
   
           return questionObj;
         })
       };
-  
+      console.log("Question List: ", questionList, "getSSSAssessment");
       return questionList;
     });
   
     return finalArray;
   } catch (e) {
-    console.log(e);
+    console.log("Error in: ", e, "getSSSAssessment");
     throw e;
   }    
 }
@@ -1538,12 +1636,12 @@ This API is to save status that reward is opened
 */
 async function rewardOpened(req) {
   try {
-    if (req && req.rewardId && req.rewardId !== "") {
-      await Reward.updateOne({ _id: req.rewardId }, { $set: { opened: true } });
+    if (req && req?.rewardId && req?.rewardId !== "") {
+      await Reward.updateOne({ _id: req?.rewardId }, { $set: { opened: true } });
       return true;
     } else throw "Please send valid input";
   } catch (error) {
-    console.log(error);
+    console.log("Error in: ", error, "rewardOpened");
     throw "Getting error. Please try after some time.";
   }
 }
@@ -1552,46 +1650,56 @@ async function rewardOpened(req) {
 This API is to get classes by the given disecode
 */
 async function getClasses(userParam) {
-  const query = {
-    isActive: true,
-    diseCode: userParam.disecode,
-  };
-
-  const students = await Student.find(query).select("id childName department");
-
-  const departments = await Departmentmaster.find({ module: "sa" }).select(
-    "id name"
-  );
-
-  const finalArray = students.map((student) => {
-    const searchMask = " ";
-    const regEx = new RegExp(searchMask, "ig");
-    const replaceMask = "";
-
-    const deptName = departments.find((dept) => dept.id === student.department);
-
-    if (deptName) {
-      return {
-        id: student.department,
-        className: deptName.name,
-        icon:
-          config.assetHost +
-          deptName.name.toLowerCase().replace(regEx, replaceMask) +
-          ".png",
-        icon_active:
-          config.assetHost +
-          "big-" +
-          deptName.name.toLowerCase().replace(regEx, replaceMask) +
-          ".png",
-        studentsCnt: students.filter((s) => s.department === student.department)
-          .length,
-      };
+  try {
+    let query = {};
+    let finalArray = [];
+  
+    //To get active students based on disecode
+    query['isActive'] = true;
+    query['diseCode'] = userParam?.disecode;
+    console.log("Query: ", query, "getClasses");
+  
+    const students = await Student.find(query).select('id childName department');
+    console.log("Students: ", students, "getClasses");
+    //To get all classes for this sa module
+    const departments = await Departmentmaster.find({ module: 'sa' }).select('id name');
+    console.log("Department: ", departments, "getClasses");
+    //To do groupby on department of students received
+    const studentsGroupByClass = _.groupBy(students, 'department');
+  
+    //Loop through objects
+    for (const deptId in studentsGroupByClass) {
+      let classList = {};
+      const searchMask = ' ';
+      const regEx = new RegExp(searchMask, 'ig');
+      const replaceMask = '';
+  
+      //To get class name
+      const deptName = _.where(departments, { id: deptId });
+  
+      if (deptName[0]) {
+        //Assigning required class info to a final object
+        classList['id'] = deptId;
+        classList['className'] = deptName[0]['name'];
+        classList['icon'] = config.assetHost + deptName[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
+        classList['icon_active'] = config.assetHost + 'big-' + deptName[0]['name'].toLowerCase().replace(regEx, replaceMask) + '.png';
+        classList['studentsCnt'] = studentsGroupByClass[deptId].length;
+    
+        //Assign object to final array
+        finalArray.push(classList);
+      }
     }
-  });
-
-  const sortedFinalArray = _.sortBy(finalArray, "className");
-
-  return sortedFinalArray;
+  
+    //Sort final array by class name
+    finalArray = _.sortBy(finalArray, 'className');
+    console.log("Sorted Final Array: ", finalArray, "getClasses");
+  
+    //return final array
+    return finalArray;
+  } catch(error) {
+    console.log("Error in: ", error, "getClasses");
+    throw error;
+  }
 }
 
 /*
@@ -1601,9 +1709,11 @@ async function getStudents(userParam) {
   try {
     const query = {
       isActive: true,
-      diseCode: userParam.disecode,
-      department: userParam.department,
+      diseCode: userParam?.disecode,
+      department: userParam?.department,
     };
+
+    console.log("Query: ", query, "getStudents");
   
     const queryAssess = {
       isActive: true,
@@ -1614,32 +1724,35 @@ async function getStudents(userParam) {
       assessmentType: "State",
     };
   
-    if (Boolean(userParam.stateId)) {
-      queryAssess.states = { $in: [userParam.stateId] };
+    if (Boolean(userParam?.stateId)) {
+      queryAssess.states = { $in: [userParam?.stateId] };
     } else {
-      const checkSchool = await School.findOne({ diseCode: userParam.disecode });
+      const checkSchool = await School.findOne({ diseCode: userParam?.disecode });
   
       if (checkSchool) {
-        queryAssess.states = { $in: [checkSchool.state.toString()] };
+        queryAssess.states = { $in: [checkSchool?.state?.toString()] };
       }
     }
   
-    queryAssess.department = userParam.department;
+    queryAssess.department = userParam?.department;
+    console.log("Query Assess: ", queryAssess, "getStudents");
   
     const dbStudents = await Student.find(query, "id childName department");
+    console.log("DB Students: ", dbStudents, "getStudents");
   
     const dbAssessments = await Assessment.find(queryAssess, "id");
+    console.log("DB Assessments: ", dbAssessments, "getStudents");
   
-    const arrAssessIds = dbAssessments.map(element => new objectId(element.id));
+    const arrAssessIds = dbAssessments.map(element => new objectId(element?.id));
     const totalTestCnt = arrAssessIds.length;
   
-    const arrStudentIds = dbStudents.map(element => new objectId(element.id));
+    const arrStudentIds = dbStudents.map(element => new objectId(element?.id));
   
     const progressRecords = await AssessmentStudentProgress.aggregate([
       {
         $match: {
           student: { $in: arrStudentIds },
-          department: new objectId(userParam.department),
+          department: new objectId(userParam?.department),
           assessment: { $in: arrAssessIds },
         },
       },
@@ -1650,23 +1763,26 @@ async function getStudents(userParam) {
         },
       },
     ]);
+
+    console.log("Progress Records: ", progressRecords, "getStudents");
   
     const finalArray = dbStudents.map(element => {
       const studentObj = {
-        id: element.id,
-        name: element.childName,
+        id: element?.id,
+        name: element?.childName,
       };
   
-      const matchingProgress = progressRecords.find(item => String(item._id) === String(element.id));
+      const matchingProgress = progressRecords.find(item => String(item?._id) === String(element?.id));
   
-      studentObj.test_attempted = matchingProgress ? matchingProgress.testAttemptedCnt : 0;
-      studentObj.test_pending = totalTestCnt - studentObj.test_attempted;
-  
+      studentObj.test_attempted = matchingProgress ? matchingProgress?.testAttemptedCnt : 0;
+      studentObj.test_pending = totalTestCnt - studentObj?.test_attempted;
+      console.log("Student Object: ", studentObj, "getStudents");
       return studentObj;
     });
-  
+    console.log("Final Array: ", finalArray, "getStudents");
     return finalArray;
   } catch (e) {
+    console.log("Error in: ", e, "getStudents");
     throw e;
   }  
 }

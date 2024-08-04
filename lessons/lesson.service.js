@@ -75,191 +75,215 @@ async function getDimension(imagePath) {
     const dimensions = await probe(imagePath);
     return { width: dimensions.width, height: dimensions.height };
   } catch (err) {
-    console.error(err);
+    console.log("Error in: ", err, "getDimension");
     return { width: 0, height: 0 };
   }
 }
 
 async function getAll(req) {
-  const draw = req.body.draw;
-  const start = req.body.start;
-  const searchValue = req.body.search.value || "";
+  try {
+    const draw = req?.body?.draw;
+    const start = req?.body?.start;
+    const searchValue = req?.body?.search?.value || "";
+  
+    const sortOptions = {
+      0: { field: "name", order: 1 },
+      2: { field: "subject.name", order: 1 },
+      3: { field: "department.name", order: 1 },
+    };
+  
+    const sortColumn = req?.body?.order[0]?.column;
+    const sortField = sortOptions[sortColumn]?.field || "name";
+    const sortOrder = req?.body?.order[0]?.dir === "asc" ? 1 : -1;
+  
+    const query = {
+      $or: [
+        { name: new RegExp(searchValue, "i") },
+        { description: new RegExp(searchValue, "i") },
+      ],
+    };
+  
+    if (searchValue.toLowerCase().startsWith("sampark smart shala")) {
+      query.$or.push({ section: "sss" });
+    } else if (searchValue.toLowerCase().startsWith("govt text book")) {
+      query.$or.push({ section: "govt" });
+    }
 
-  const sortOptions = {
-    0: { field: "name", order: 1 },
-    2: { field: "subject.name", order: 1 },
-    3: { field: "department.name", order: 1 },
-  };
-
-  const sortColumn = req.body.order[0]?.column;
-  const sortField = sortOptions[sortColumn]?.field || "name";
-  const sortOrder = req.body.order[0]?.dir === "asc" ? 1 : -1;
-
-  const query = {
-    $or: [
-      { name: new RegExp(searchValue, "i") },
-      { description: new RegExp(searchValue, "i") },
-    ],
-  };
-
-  if (searchValue.toLowerCase().startsWith("sampark smart shala")) {
-    query.$or.push({ section: "sss" });
-  } else if (searchValue.toLowerCase().startsWith("govt text book")) {
-    query.$or.push({ section: "govt" });
+    console.log("Query: ", query, "getAllLessons");
+  
+    const subjectsData = await Subjectmaster.find({
+      name: new RegExp(searchValue, "i"),
+    });
+    const subjectIds = subjectsData.map((subject) => subject.id);
+  
+    if (subjectIds.length > 0) {
+      query.$or.push({ "subject.$in": subjectIds });
+    }
+  
+    const departmentsData = await Departmentmaster.find({
+      name: new RegExp(searchValue, "i"),
+    });
+    const departmentIds = departmentsData.map((department) => department.id);
+  
+    if (departmentIds.length > 0) {
+      query.$or.push({ "department.$in": departmentIds });
+    }
+  
+    const filteredLessons = await Lesson.find(query).count();
+  
+    const lessons = await Lesson.find(query)
+      .populate("subject", "name")
+      .populate("department", "name")
+      .sort({ [sortField]: sortOrder })
+      .limit(req.body.length)
+      .skip(start);
+  
+    const lessonListing = lessons.map((lessondata) => ({
+      id: lessondata["_id"],
+      name: lessondata["name"],
+      section: lessondata["section"],
+      subject: lessondata["subject"]["name"],
+      department: lessondata["department"]["name"],
+      states: lessondata["states"],
+      lesson_no: lessondata["lesson_no"],
+      is_active: lessondata["is_active"],
+    }));
+  
+    const returnData = {
+      data: lessonListing,
+      draw: draw,
+      recordsFiltered: filteredLessons,
+      recordsTotal: await Lesson.find().count(),
+    };
+    console.log("Data: ", returnData, "getAllLessons");
+    return returnData;
+  } catch(error) {
+    console.log("Error in: ", error, "getAllLessons");
   }
-
-  const subjectsData = await Subjectmaster.find({
-    name: new RegExp(searchValue, "i"),
-  });
-  const subjectIds = subjectsData.map((subject) => subject.id);
-
-  if (subjectIds.length > 0) {
-    query.$or.push({ "subject.$in": subjectIds });
-  }
-
-  const departmentsData = await Departmentmaster.find({
-    name: new RegExp(searchValue, "i"),
-  });
-  const departmentIds = departmentsData.map((department) => department.id);
-
-  if (departmentIds.length > 0) {
-    query.$or.push({ "department.$in": departmentIds });
-  }
-
-  const filteredLessons = await Lesson.find(query).count();
-
-  const lessons = await Lesson.find(query)
-    .populate("subject", "name")
-    .populate("department", "name")
-    .sort({ [sortField]: sortOrder })
-    .limit(req.body.length)
-    .skip(start);
-
-  const lessonListing = lessons.map((lessondata) => ({
-    id: lessondata["_id"],
-    name: lessondata["name"],
-    section: lessondata["section"],
-    subject: lessondata["subject"]["name"],
-    department: lessondata["department"]["name"],
-    states: lessondata["states"],
-    lesson_no: lessondata["lesson_no"],
-    is_active: lessondata["is_active"],
-  }));
-
-  const returnData = {
-    data: lessonListing,
-    draw: draw,
-    recordsFiltered: filteredLessons,
-    recordsTotal: await Lesson.find().count(),
-  };
-
-  return returnData;
 }
 
 // Helper functions
 function getVideoDuration(video) {
-  let duration = "";
-  if (video.duration_min !== "" && video.duration_min !== null) {
-    duration = video.duration_min + " Mins ";
+  try {
+    let duration = "";
+    if (video?.duration_min !== "" && video?.duration_min !== null) {
+      duration = video?.duration_min + " Mins ";
+    }
+    if (video?.duration_sec !== "" && video?.duration_sec !== null) {
+      duration += video.duration_sec + " Secs";
+    }
+    return duration;
+  } catch(error) {
+    console.log("Error in: ", error, "getVideoDuration");
   }
-  if (video.duration_sec !== "" && video.duration_sec !== null) {
-    duration += video.duration_sec + " Secs";
-  }
-  return duration;
 }
 
 function getVideoThumbnail(video) {
-  if (video.thumbnail !== "" && video.thumbnail !== "null") {
-    return config.repositoryHost + video.thumbnail;
-  } else {
-    return "https://img.youtube.com/vi/" + video.video_code + "/hqdefault.jpg";
+  try {
+    if (video?.thumbnail !== "" && video?.thumbnail !== "null") {
+      return config.repositoryHost + video.thumbnail;
+    } else {
+      return "https://img.youtube.com/vi/" + video?.video_code + "/hqdefault.jpg";
+    }
+  } catch(error) {
+    console.log("Error in: ", error, "getVideoThumbnail");
   }
 }
 
 async function search(searchstring, device_id, userid) {
-  const query = {
-    $or: [
-      { fullName: new RegExp(searchstring, "i") },
-      { description: new RegExp(searchstring, "i") },
-      { name: new RegExp(searchstring, "i") },
-    ],
-  };
-
-  const usersData = await User.find({
-    fullName: new RegExp(searchstring, "i"),
-  });
-  const userids = usersData.map((user) => user.id);
-
-  const querySearch = {
-    $or: [
-      { author: { $in: userids } },
-      { description: new RegExp(searchstring, "i") },
-      { name: new RegExp(searchstring, "i") },
-    ],
-  };
-
-  const videos = await Video.find(querySearch);
-
-  const sssVideoWatched = {};
-  const sssVideoLikes = {};
-
-  if (videos.length > 0 && userid !== "") {
-    const userLikes = await Sssvideoviewed.find({ user: userid });
-    userLikes.forEach((userLike) => {
-      sssVideoWatched[userLike.video] = true;
+  try {
+    const query = {
+      $or: [
+        { fullName: new RegExp(searchstring, "i") },
+        { description: new RegExp(searchstring, "i") },
+        { name: new RegExp(searchstring, "i") },
+      ],
+    };
+  
+    const usersData = await User.find({
+      fullName: new RegExp(searchstring, "i"),
     });
-
-    const userLikesInfo = await Sssvideolike.find({ user: userid }).select(
-      "video is_liked"
-    );
-    userLikesInfo.forEach((userLike) => {
-      sssVideoLikes[userLike.video] = userLike.is_liked;
-    });
-  }
-
-  const samparkVideos = videos.map((video) => {
-    const samparkVideo = {
-      name: video.name,
-      description: video.description,
-      is_liked: sssVideoLikes[video.id] ? sssVideoLikes[video.id] : "",
-      watched: sssVideoWatched[video.id] ? true : "",
-      is_shareable: true,
-      likecount: video.likecount,
-      commentcount: video.commentcount,
-      streamtype: "sssvideo",
-      id: video.id,
-      url:
-        config.repositoryHost +
-        "samparkvideos/" +
-        video.module +
-        "/" +
-        video.url,
-      video_code: video.video_code,
-      duration: getVideoDuration(video),
-      views: video.viewcount,
-      thumbnail: getVideoThumbnail(video),
+    const userids = usersData.map((user) => user.id);
+  
+    const querySearch = {
+      $or: [
+        { author: { $in: userids } },
+        { description: new RegExp(searchstring, "i") },
+        { name: new RegExp(searchstring, "i") },
+      ],
     };
 
-    return samparkVideo;
-  });
-
-  const userStreams = {
-    streams: samparkVideos,
-    max_records: config.max_no_of_streams_on_mobile_storage,
-  };
-
-  return userStreams;
+    console.log("Query Search: ", querySearch, "searchLesson");
+  
+    const videos = await Video.find(querySearch);
+  
+    const sssVideoWatched = {};
+    const sssVideoLikes = {};
+  
+    if (videos.length > 0 && userid !== "") {
+      const userLikes = await Sssvideoviewed.find({ user: userid });
+      userLikes.forEach((userLike) => {
+        sssVideoWatched[userLike.video] = true;
+      });
+  
+      const userLikesInfo = await Sssvideolike.find({ user: userid }).select(
+        "video is_liked"
+      );
+      userLikesInfo.forEach((userLike) => {
+        sssVideoLikes[userLike.video] = userLike.is_liked;
+      });
+    }
+  
+    const samparkVideos = videos.map((video) => {
+      const samparkVideo = {
+        name: video.name,
+        description: video.description,
+        is_liked: sssVideoLikes[video.id] ? sssVideoLikes[video.id] : "",
+        watched: sssVideoWatched[video.id] ? true : "",
+        is_shareable: true,
+        likecount: video.likecount,
+        commentcount: video.commentcount,
+        streamtype: "sssvideo",
+        id: video.id,
+        url:
+          config.repositoryHost +
+          "samparkvideos/" +
+          video.module +
+          "/" +
+          video.url,
+        video_code: video.video_code,
+        duration: getVideoDuration(video),
+        views: video.viewcount,
+        thumbnail: getVideoThumbnail(video),
+      };
+      console.log("Video: ", samparkVideo, "SearchLesson");
+      return samparkVideo;
+    });
+  
+    const userStreams = {
+      streams: samparkVideos,
+      max_records: config.max_no_of_streams_on_mobile_storage,
+    };
+    console.log("user stream: ", userStreams, "SearchLesson");
+    return userStreams;
+  } catch(error) {
+    console.log("Error in: ", error, "searchLesson");
+  }
 }
 
 async function secondsToHms(d) {
-  const hours = Math.floor(d / 3600);
-  const minutes = Math.floor((d % 3600) / 60);
-
-  const hDisplay = hours > 0 ? `${hours} घंटे ` : "";
-  const mDisplay1 = "";
-  const mDisplay = minutes > 0 ? `${minutes} मिनट ` : "";
-
-  return hDisplay + mDisplay1 + mDisplay;
+  try {
+    const hours = Math.floor(d / 3600);
+    const minutes = Math.floor((d % 3600) / 60);
+  
+    const hDisplay = hours > 0 ? `${hours} घंटे ` : "";
+    const mDisplay1 = "";
+    const mDisplay = minutes > 0 ? `${minutes} मिनट ` : "";
+  
+    return hDisplay + mDisplay1 + mDisplay;
+  } catch(error) {
+    console.log("Error in: ", error, "secondsToHms");
+  }
 }
 
 /* Fetch List of lessons starts
@@ -939,74 +963,82 @@ async function getList(userid, device_id, apk_version) {
 /* Fetch List of lessons ends */
 
 async function getUserDetails(userId) {
-  if (!userId) {
-    return null;
+  try {
+    if (!userId) {
+      return null;
+    }
+    const curUser = await User.findById(userId);
+    if (!curUser) {
+      return null;
+    }
+    const { usertype, state } = curUser;
+    return { usertype, state };
+  } catch(error) {
+    console.log("Error in: ", error, "getUserDetails");
   }
-  const curUser = await User.findById(userId);
-  if (!curUser) {
-    return null;
-  }
-  const { usertype, state } = curUser;
-  return { usertype, state };
 }
 
 async function getLessonDetails(lesson) {
-  const {
-    id,
-    is_shareable,
-    description,
-    social_content,
-    author,
-    name,
-    subject,
-    department,
-    module,
-    sort_order,
-    lesson_code,
-  } = lesson;
-
-  const regEx = new RegExp("class", "ig");
-
-  const sub_title =
-    module === "ssh"
-      ? `${subject.name} ${department.name.replace(regEx, "")}`
-      : `${subject.name} ${department.name.replace(
-          regEx,
-          ""
-        )} | Lesson ${sort_order}`;
-
-  const url = await getLessonUrl(lesson);
-  const dimensions = await getThumbnailDimensions(lesson);
-
-  const thumbnail = dimensions
-    ? `${config.repositoryHost}${lesson.thumbnail}`
-    : `https://img.youtube.com/vi/${lesson.lesson_code}/hqdefault.jpg`;
-
-  const lessonDetails = {
-    id,
-    is_shareable,
-    description,
-    social_content,
-    author,
-    name,
-    subject,
-    department,
-    sub_title,
-    lesson_code,
-    sort_order,
-    url,
-    thumbnail,
-    width: dimensions?.width || "",
-    height: dimensions?.height || "",
-    stream_type: "ssslesson",
-    stream_id: id,
-    module,
-    viewcount: 0,
-    likecount: lesson.likecount,
-    commentcount: lesson.commentcount,
-  };
-
-  return lessonDetails;
+  try {
+    const {
+      id,
+      is_shareable,
+      description,
+      social_content,
+      author,
+      name,
+      subject,
+      department,
+      module,
+      sort_order,
+      lesson_code,
+    } = lesson;
+  
+    const regEx = new RegExp("class", "ig");
+  
+    const sub_title =
+      module === "ssh"
+        ? `${subject.name} ${department.name.replace(regEx, "")}`
+        : `${subject.name} ${department.name.replace(
+            regEx,
+            ""
+          )} | Lesson ${sort_order}`;
+  
+    const url = await getLessonUrl(lesson);
+    const dimensions = await getThumbnailDimensions(lesson);
+  
+    const thumbnail = dimensions
+      ? `${config.repositoryHost}${lesson.thumbnail}`
+      : `https://img.youtube.com/vi/${lesson.lesson_code}/hqdefault.jpg`;
+  
+    const lessonDetails = {
+      id,
+      is_shareable,
+      description,
+      social_content,
+      author,
+      name,
+      subject,
+      department,
+      sub_title,
+      lesson_code,
+      sort_order,
+      url,
+      thumbnail,
+      width: dimensions?.width || "",
+      height: dimensions?.height || "",
+      stream_type: "ssslesson",
+      stream_id: id,
+      module,
+      viewcount: 0,
+      likecount: lesson.likecount,
+      commentcount: lesson.commentcount,
+    };
+    console.log("Lesson Details: ", lessonDetails, "getLessonDetails");
+    return lessonDetails;
+  } catch(error) {
+    console.log("Error in: ", error, "getLessonDetails");
+  }
 }
 
 async function getLessonUrl(lesson) {
@@ -1020,7 +1052,7 @@ async function getLessonUrl(lesson) {
       return `${config.repositoryHost}samparklessons/${module}/${url}`;
     }
   } catch (err) {
-    console.error(err);
+    console.log("Error in: ", err, "getLessonUrl");
   }
 
   return "";
@@ -1034,7 +1066,7 @@ async function getThumbnailDimensions(lesson) {
       return await getDimension(config.repositoryHost + thumbnail);
     }
   } catch (err) {
-    console.error(err);
+    console.log("Error in: ", err, "getThumbnailDimensions");
   }
 
   return null;
@@ -1046,36 +1078,40 @@ async function getAllbyDepartmentSubject(
   user,
   catgeory
 ) {
-  const query = {
-    is_active: true,
-  };
-
-  if (departmentname !== "") {
-    query.department = departmentname;
+  try {
+    const query = {
+      is_active: true,
+    };
+  
+    if (departmentname !== "") {
+      query.department = departmentname;
+    }
+  
+    if (subjectname !== "") {
+      query.subject = subjectname;
+    }
+  
+    const curUser = await getUserDetails(user);
+  
+    const lessons = await Lesson.find(query)
+      .populate("subject", "name")
+      .populate("department", "name")
+      .select(
+        "id name thumbnail description subject department author url is_shareable sort_order lesson_code module likecount commentcount social_content"
+      )
+      .sort({ sort_order: 1 });
+  
+    const lessonList = await Promise.all(
+      lessons.map(async (lesson) => {
+        const lessonDetails = await getLessonDetails(lesson);
+        return lessonDetails;
+      })
+    );
+    console.log("Lesson List: ", lessonList, "getAllbyDepartmentSubject");
+    return lessonList;
+  } catch(error) {
+    console.log("Error in: ", error, "getAllbyDepartmentSubject");
   }
-
-  if (subjectname !== "") {
-    query.subject = subjectname;
-  }
-
-  const curUser = await getUserDetails(user);
-
-  const lessons = await Lesson.find(query)
-    .populate("subject", "name")
-    .populate("department", "name")
-    .select(
-      "id name thumbnail description subject department author url is_shareable sort_order lesson_code module likecount commentcount social_content"
-    )
-    .sort({ sort_order: 1 });
-
-  const lessonList = await Promise.all(
-    lessons.map(async (lesson) => {
-      const lessonDetails = await getLessonDetails(lesson);
-      return lessonDetails;
-    })
-  );
-
-  return lessonList;
 }
 
 async function getById(id, userid, device_id) {
@@ -1382,9 +1418,9 @@ async function getById(id, userid, device_id) {
       lessonDetails["vocabularysentences"] = vocabularysentences;
     }
 
-    var sssvideoviews = [];
-    var videoviews = [];
-    var audioviews = [];
+    const sssvideoviews = [];
+    const videoviews = [];
+    const audioviews = [];
     if (lesson["is_launched"]) {
       if (lesson["videos"].length > 0 && lesson["videos"][0] != "") {
         const videos = await Video.find({ _id: { $in: lesson["videos"] } });
@@ -2311,7 +2347,7 @@ async function getById(id, userid, device_id) {
     lessonDetails["total_resources"] = total_resources;
     return lessonDetails;
   } catch (e) {
-    console.log(e);
+    console.log("Error in: ", e, "getLessonById");
   }
 }
 

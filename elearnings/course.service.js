@@ -29,13 +29,13 @@ const Videostream = db.Videostream;
 const AssessmentStudentProgress = db.Assessmentstudentprogress;
 const Stream = db.Stream;
 const getCurrentUserDetails = commonmethods.getCurrentUserDetails;
-var q = require("q");
-var path = require("path");
-var isBase64 = require("is-base64");
-var moment = require("moment");
-var _ = require("underscore");
+const q = require("q");
+const path = require("path");
+const isBase64 = require("is-base64");
+const moment = require("moment");
+const _ = require("underscore");
 const { ObjectId } = require("mongodb");
-var objectId = require("mongoose").Types.ObjectId;
+const objectId = require("mongoose").Types.ObjectId;
 
 module.exports = {
   getAllCourses: getAllCourses,
@@ -69,17 +69,17 @@ async function getCourseDetail(
   const defer = q.defer();
   try {
     const courseDetail = {
-      id: curCourse.id,
-      name: curCourse.name,
-      description: curCourse.description,
-      rating: curCourse.rating,
-      startDate: curCourse.startDate,
-      endDate: curCourse.endDate,
-      isPublished: curCourse.isPublished,
-      publishedDate: curCourse.publishedDate,
-      image: config.repositoryHost + curCourse.image,
-      introductoryImage: curCourse.introductoryImage
-        ? config.repositoryHost + curCourse.introductoryImage
+      id: curCourse?.id,
+      name: curCourse?.name,
+      description: curCourse?.description,
+      rating: curCourse?.rating,
+      startDate: curCourse?.startDate,
+      endDate: curCourse?.endDate,
+      isPublished: curCourse?.isPublished,
+      publishedDate: curCourse?.publishedDate,
+      image: config?.repositoryHost + curCourse?.image,
+      introductoryImage: curCourse?.introductoryImage
+        ? config?.repositoryHost + curCourse?.introductoryImage
         : "",
     };
 
@@ -92,8 +92,8 @@ async function getCourseDetail(
     courseDetail.isLatest = !courseDetail.isTopPick;
 
     let totalDuration = 0;
-    if (curCourse.totalDuration !== "null") {
-      const totalDurations = curCourse.totalDuration.split(":").map(Number);
+    if (curCourse?.totalDuration !== "null") {
+      const totalDurations = curCourse?.totalDuration?.split(":").map(Number);
       totalDuration = totalDurations.reduce(
         (acc, val, index) =>
           acc + val * Math.pow(60, totalDurations.length - 1 - index),
@@ -101,22 +101,22 @@ async function getCourseDetail(
       );
     }
 
-    courseDetail.noOfModules = curCourse.noOfModules;
+    courseDetail.noOfModules = curCourse?.noOfModules;
     courseDetail.totalDuration = totalDuration;
-    courseDetail.subject = curCourse.subject;
-    courseDetail.class = curCourse.department;
+    courseDetail.subject = curCourse?.subject;
+    courseDetail.class = curCourse?.department;
     courseDetail.certificationGroup = "";
     courseDetail.certificationGroupName = "";
 
-    if (curCourse.certificationGroup) {
+    if (curCourse?.certificationGroup) {
       const certification = certificationGroups.find(
-        (e) => e.id.toString() === curCourse.certificationGroup.toString()
+        (e) => e.id.toString() === curCourse?.certificationGroup?.toString()
       );
       courseDetail.certificationGroup = certification?.id || "";
       courseDetail.certificationGroupName = certification?.name || "";
     }
 
-    courseDetail.class = curCourse.certificationGroup;
+    courseDetail.class = curCourse?.certificationGroup;
     courseDetail.userStatus = "not-enrolled";
     courseDetail.remainingDuration = totalDuration;
     courseDetail.points = "";
@@ -135,17 +135,16 @@ async function getCourseDetail(
     courseDetail.livesession = checkLiveSession || "";
 
     if (checkEnrollment) {
-      courseDetail.userStatus = checkEnrollment.status;
-      courseDetail.points = checkEnrollment.points || "";
+      courseDetail.userStatus = checkEnrollment?.status;
+      courseDetail.points = checkEnrollment?.points || "";
       courseDetail.remainingDuration = totalDuration;
-      courseDetail.completion_date = checkEnrollment.completionDate || "";
+      courseDetail.completion_date = checkEnrollment?.completionDate || "";
     }
 
     defer.resolve(courseDetail);
   } catch (e) {
-    console.log(e);
+    console.log("Error in: ", error, "getCourseDetail");
     defer.reject(e);
-    throw e;
   }
   return defer.promise;
 }
@@ -184,6 +183,8 @@ async function getAllCourses(userid) {
     if (isTemporaryUser) {
       query.isPreInductionCourse = true;
     }
+
+    console.log("Query: ", query, "getAllCourses");
 
     const enrollments = await Enrollment.find({ user: userid });
     const progressCourses = enrollments.filter(
@@ -229,12 +230,11 @@ async function getAllCourses(userid) {
         )
       )
     );
-
+    console.log("Course List: ", courseList, "getAllCourses");
     defer.resolve(courseList);
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getAllCourses");
     defer.reject(e);
-    throw e;
   }
   return defer.promise;
 }
@@ -250,7 +250,7 @@ async function getModuleDetail(
     const videoids = [];
     const worksheetids = [];
     const courseProgress = courseProgresses.find(
-      (p) => p.module.toString() === curModule.id.toString()
+      (p) => p?.module?.toString() === curModule?.id?.toString()
     );
 
     const videos = await Video.find(
@@ -266,48 +266,50 @@ async function getModuleDetail(
       }
     );
 
+    console.log("Videos: ", videos, "getModuleDetail");
+
     const worksheets =
-      curModule.worksheets.length > 1 ||
-      (curModule.worksheets.length === 1 && curModule.worksheets[0] !== "")
+      curModule?.worksheets?.length > 1 ||
+      (curModule?.worksheets?.length === 1 && curModule?.worksheets[0] !== "")
         ? await Document.find(
-            { _id: { $in: curModule.worksheets } },
+            { _id: { $in: curModule?.worksheets } },
             { name: 1, doc_url: 1 }
           )
         : [];
 
     const videoList = videos.map((video) => {
       const duration =
-        (video.duration_min !== "" && video.duration_min !== null
-          ? parseInt(video.duration_min) * 60
+        (video?.duration_min !== "" && video?.duration_min !== null
+          ? parseInt(video?.duration_min) * 60
           : 0) +
-        (video.duration_sec !== "" && video.duration_sec !== null
-          ? parseInt(video.duration_sec)
+        (video?.duration_sec !== "" && video?.duration_sec !== null
+          ? parseInt(video?.duration_sec)
           : 0);
 
       const progress = moduleProgresses.find(
         (p) =>
-          p.module.toString() === curModule.id.toString() &&
-          p.viewedItemType.toString() === "video" &&
-          p.viewedItem.toString() === video.id.toString()
+          p?.module.toString() === curModule?.id.toString() &&
+          p?.viewedItemType.toString() === "video" &&
+          p?.viewedItem.toString() === video?.id.toString()
       );
 
-      videoids.push(video.id.toString());
+      videoids.push(video?.id?.toString());
 
       return {
-        id: video.id,
-        name: video.name,
-        description: video.description,
+        id: video?.id,
+        name: video?.name,
+        description: video?.description,
         url:
-          config.repositoryHost +
+          config?.repositoryHost +
           "samparkvideos/" +
-          video.module +
+          video?.module +
           "/" +
-          video.url,
-        video_code: video.video_code,
+          video?.url,
+        video_code: video?.video_code,
         duration: duration,
         watched: progress ? true : false,
-        display_count: (curModule.videos.indexOf(video.id) + 1).toString(),
-        sortOrder: curModule.videos.indexOf(video.id),
+        display_count: (curModule?.videos.indexOf(video?.id) + 1).toString(),
+        sortOrder: curModule?.videos.indexOf(video?.id),
       };
     });
 
@@ -322,16 +324,16 @@ async function getModuleDetail(
       worksheetids.push(worksheet.id.toString());
 
       return {
-        id: worksheet.id,
-        name: worksheet.name,
-        url: config.repositoryHost + worksheet.doc_url,
+        id: worksheet?.id,
+        name: worksheet?.name,
+        url: config?.repositoryHost + worksheet?.doc_url,
         watched: progress ? true : false,
         display_count: (
-          curModule.worksheets.indexOf(worksheet.id) +
-          videoList.length +
+          curModule?.worksheets.indexOf(worksheet?.id) +
+          videoList?.length +
           1
         ).toString(),
-        sortOrder: curModule.worksheets.indexOf(worksheet.id),
+        sortOrder: curModule?.worksheets.indexOf(worksheet.id),
       };
     });
 
@@ -343,7 +345,7 @@ async function getModuleDetail(
     ).map((item) => item.toString());
 
     videoList.forEach((video) => {
-      if (videoswatched.includes(video.id.toString())) video.watched = true;
+      if (videoswatched.includes(video?.id.toString())) video.watched = true;
     });
 
     const worksheetswatched = (
@@ -359,19 +361,19 @@ async function getModuleDetail(
     });
 
     const moduleDetail = {
-      id: curModule.id,
-      name: curModule.name,
-      image: config.repositoryHost + curModule.image,
+      id: curModule?.id,
+      name: curModule?.name,
+      image: config?.repositoryHost + curModule?.image,
       duration: 0,
-      description: curModule.description,
-      sortOrder: curModule.sortOrder,
-      userStatus: courseProgress ? courseProgress.status : "not-started",
+      description: curModule?.description,
+      sortOrder: curModule?.sortOrder,
+      userStatus: courseProgress ? courseProgress?.status : "not-started",
       videos: videoList,
       worksheets: worksheetList,
-      quiz: curModule.quiz,
+      quiz: curModule?.quiz,
       quiz_display_count: (
-        videoList.length +
-        worksheetList.length +
+        videoList?.length +
+        worksheetList?.length +
         1
       ).toString(),
       quizTaken:
@@ -379,18 +381,17 @@ async function getModuleDetail(
     };
 
     if (curModule.duration !== "null") {
-      const totalDurations = curModule.duration.toString().split(":");
+      const totalDurations = curModule?.duration?.toString().split(":");
       const hrs = parseInt(totalDurations[0]);
       const mins = totalDurations.length > 1 ? parseInt(totalDurations[1]) : 0;
       moduleDetail.duration = hrs * 60 + mins;
-      if (isNaN(moduleDetail.duration)) moduleDetail.duration = 0;
+      if (isNaN(moduleDetail?.duration)) moduleDetail.duration = 0;
     }
-
+    console.log("Module Detail: ", moduleDetail, "getModuleDetail");
     defer.resolve(moduleDetail);
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getModuleDetail");
     defer.reject(e);
-    throw e;
   }
   return defer.promise;
 }
@@ -497,7 +498,7 @@ async function getCourseModules(userid, course) {
 
     return courseDetails;
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getCourseModules");
     throw e;
   }
 }
@@ -505,8 +506,8 @@ async function getCourseModules(userid, course) {
 async function enroll(req) {
   let defer = require("q").defer();
   try {
-    let course = req.course;
-    let user = req.user;
+    let course = req?.course;
+    let user = req?.user;
 
     let query = {};
     let queryUser = {};
@@ -553,8 +554,7 @@ async function enroll(req) {
     await newEnrollment.save();
     defer.resolve({ success: true });
   } catch (e) {
-    console.log(e);
-    throw e;
+    console.log("Error in: ", e, "enroll");
     defer.reject(e);
   }
   return defer.promise;
@@ -589,8 +589,7 @@ async function cancelEnrollment(req) {
 
     defer.resolve({ success: true });
   } catch (e) {
-    console.log(e);
-    throw e;
+    console.log("Error in: ", e, "cancelEnrollment");
     defer.reject(e);
   }
   return defer.promise;
@@ -818,7 +817,7 @@ async function feedbacks(course, userid, pageNo) {
 
     return Promise.all(result);
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "feedbacks");
     throw e;
   }
 }
@@ -860,8 +859,7 @@ async function likeFeedback(req) {
     );
     defer.resolve({ success: true });
   } catch (e) {
-    console.log(e);
-    throw e;
+    console.log("Error in: ", e, "likeFeedback");
     defer.reject(e);
   }
   return defer.promise;
@@ -890,8 +888,7 @@ async function liveSessionRequest(req) {
     }
     defer.resolve({ success: true });
   } catch (e) {
-    console.log(e);
-    throw e;
+    console.log("Error in: ", e, "liveSessionRequest");
     defer.reject(e);
   }
   return defer.promise;
@@ -925,6 +922,8 @@ async function getQuizQuestions(assessmentId) {
       questionType: "objective",
       assessment: { $in: arrAssessmentIds },
     };
+
+    console.log("Query: ", query, "getQuizQuestions");
 
     const assessmentQuestions = await AssessmentQuestion.find(query);
     const queryAssess = { isActive: true };
@@ -1030,15 +1029,15 @@ async function getQuizQuestions(assessmentId) {
             return questionObj;
           })
         );
-
+        console.log("Question Array: ", questionArr, "getQuizQuestions");
         questionList.questions = questionArr;
         return questionList;
       })
     );
-
+    console.log("Final Array: ", finalArray, "getQuizQuestions");
     return finalArray;
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getQuizQuestions");
     throw e;
   }
 }
@@ -1053,8 +1052,7 @@ async function getUserDetails(userid) {
       defer.resolve("");
     }
   } catch (e) {
-    console.log(e);
-    throw e;
+    console.log("Error in: ", e, "getUserDetails");
     defer.reject(e);
   }
   return defer.promise;
@@ -1478,32 +1476,32 @@ async function getQuizResults(assessDetails) {
       throw new UserException("Assessment details are empty", 400);
     }
 
-    const moduleId = assessDetails.moduleId;
+    const moduleId = assessDetails?.moduleId;
     let courseId = "";
-    const assessmentId = assessDetails.assessmentId;
+    const assessmentId = assessDetails?.assessmentId;
 
     const moduleDetails = await Coursemodule.findById(moduleId);
     if (!moduleDetails) {
       throw new UserException("Module does not exist", 404);
     }
-    courseId = moduleDetails.course;
+    courseId = moduleDetails?.course;
 
     const enrollmentDetails = await Enrollment.findOne({
       course: courseId,
-      user: assessDetails.loggedInUserID,
+      user: assessDetails?.loggedInUserID,
     });
 
     if (!enrollmentDetails) {
       throw new UserException("You have not enrolled for the course", 404);
     }
 
-    const enrollmentId = enrollmentDetails._id;
+    const enrollmentId = enrollmentDetails?._id;
 
     const studentProgress = await AssessmentStudentProgress.findOne({
       enrollment: enrollmentId,
       module: moduleId,
       course: courseId,
-      student: assessDetails.loggedInUserID,
+      student: assessDetails?.loggedInUserID,
       assessment: assessmentId,
     }).sort({ createdAt: -1 });
 
@@ -1516,7 +1514,7 @@ async function getQuizResults(assessDetails) {
       answers: studentProgress.answers,
     };
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getQuizResults");
     throw e;
   }
 }
@@ -1710,25 +1708,25 @@ async function getCertificate(assessDetails) {
   try {
     if (
       !_.isEmpty(assessDetails) &&
-      assessDetails.courseId &&
-      assessDetails.loggedInUserID
+      assessDetails?.courseId &&
+      assessDetails?.loggedInUserID
     ) {
       const checkusercertificate = await Usercertificate.find({
-        user: assessDetails.loggedInUserID,
-        course: assessDetails.courseId,
+        user: assessDetails?.loggedInUserID,
+        course: assessDetails?.courseId,
       });
 
       let certificate = "";
 
-      if (checkusercertificate.length === 0) {
+      if (checkusercertificate?.length === 0) {
         certificate = await createCertificate(
           assessDetails.courseId,
           assessDetails.loggedInUserID
         );
 
         const usercerticate = new Usercertificate({
-          user: assessDetails.loggedInUserID,
-          course: assessDetails.courseId,
+          user: assessDetails?.loggedInUserID,
+          course: assessDetails?.courseId,
           path: certificate,
         });
 
@@ -1736,15 +1734,15 @@ async function getCertificate(assessDetails) {
           console.log("CERTIFICATE SAVED");
         }
       } else {
-        certificate = checkusercertificate[0].path;
+        certificate = checkusercertificate[0]?.path;
       }
 
-      return config.repositoryHost + certificate;
+      return config?.repositoryHost + certificate;
     } else {
       throw "Assessment results need to be passed in JSON format with courseId and loggedInUserID";
     }
   } catch (e) {
-    console.error(e);
+    console.log("Error in: ", e, "getCertificate");
     throw e;
   }
 }

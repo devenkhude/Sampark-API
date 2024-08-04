@@ -27,54 +27,64 @@ async function getAllbyDepartmentSubject(departmentName, subjectName) {
     if (subjectName !== "") {
       query["subject"] = subjectName;
     }
-
+    console.log("Query: ", query, "getAllbyDepartmentSubject");
     const concepts = await Conceptmaster.find(query);
     const conceptList = await Promise.all(
       concepts.map(async (element) => {
         const concept = {
-          id: element.id,
-          name: element.name,
-          subject: element.subject,
-          department: element.department,
+          id: element?.id,
+          name: element?.name,
+          subject: element?.subject,
+          department: element?.department,
         };
 
-        query["concept"] = element.id;
+        query["concept"] = element?.id;
 
         const videos = await Video.find(query).select(
           "id name thumbnail video_code"
         );
         const videoList = videos.map((elem) => {
           const video = {
-            id: elem.id,
-            name: elem.name,
+            id: elem?.id,
+            name: elem?.name,
             thumbnail:
-              elem.thumbnail !== "" && elem.thumbnail !== "null"
-                ? config.repositoryHost + elem.thumbnail
-                : `https://img.youtube.com/vi/${elem.video_code}/hqdefault.jpg`,
+              elem?.thumbnail !== "" && elem?.thumbnail !== "null"
+                ? config?.repositoryHost + elem?.thumbnail
+                : `https://img.youtube.com/vi/${elem?.video_code}/hqdefault.jpg`,
           };
           return video;
         });
 
         concept.videos = videoList;
+        console.log("Concept: ", concept, "getAllbyDepartmentSubject");
         return concept;
       })
     );
-
+    console.log("Concept List: ", conceptList, "getAllbyDepartmentSubject");
     return conceptList;
   } catch (err) {
+    console.log("Error in: ", err, "getAllbyDepartmentSubject");
     throw err;
   }
 }
 
 async function getAll() {
-  return await Conceptmaster.find()
+  try {
+    return await Conceptmaster.find()
     .populate("subject", "name")
     .populate("department", "name")
     .select("-hash");
+  } catch (err) {
+    console.log("Concept: ", concept, "getAllConcepts");
+  }
 }
 
 async function getById(id) {
-  return await Conceptmaster.findById(id).select("-hash");
+    try {
+      return await Conceptmaster.findById(id).select("-hash");
+    } catch (err) {
+      console.log("Concept: ", concept, "getAllConceptsByID");
+    }
 }
 
 async function create(req) {

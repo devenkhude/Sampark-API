@@ -43,6 +43,11 @@ module.exports = {
 };
 
 async function getVideos() {
+  try {
+
+  } catch (error) {
+    console.log("Error in: ", error, "getVideos");
+  }
   const scertstreams = await Scertstream.find({ item_type: "video" })
     .sort({ publishDate: -1 })
     .populate({

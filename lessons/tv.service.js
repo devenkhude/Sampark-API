@@ -40,17 +40,17 @@ const Tv_qr_scan = db.Tv_qr_scan;
 
 const b = 'https://sss.samparksmartshala.org/sss/';
 
-var { promisify } = require('util');
-var url = require('url');
-var http = require('http');
-var https = require('https');
-var path = require('path');
-var _ = require('underscore');
+const { promisify } = require('util');
+const url = require('url');
+const http = require('http');
+const https = require('https');
+const path = require('path');
+const _ = require('underscore');
 let TinyURL = require('tinyurl');
 let q = require('q');
 const { Console } = require('console');
-var objectId = require("mongoose").Types.ObjectId;
-var _ = require("underscore");
+const objectId = require("mongoose").Types.ObjectId;
+const _ = require("underscore");
 
 module.exports = {
   getAll,
@@ -104,9 +104,9 @@ async function postLessonsDetails(req) {
     const device_id = req.body.device_id; // taking device_id from body for now
     let data = req.body.data
     for (let d = 0; d < data.length; d++) {
-      var class_id = req.body.data[d].id.trim();
-      var class_name = req.body.data[d].name.trim();
-      var subjects = req.body.data[d].subjects;
+      const class_id = req.body.data[d].id.trim();
+      const class_name = req.body.data[d].name.trim();
+      const subjects = req.body.data[d].subjects;
       if (!subjects || subjects.length === 0) return 'plese provide subjects' // if we did not get subjects
       else {
         subjects.map(async (item) => {
@@ -120,7 +120,7 @@ async function postLessonsDetails(req) {
             subject_id,
           });
           if (exist_user_progress.length === 0) {
-            var user_progress = new Tv_user_progress({
+            const user_progress = new Tv_user_progress({
               device_id,
               class_id,
               class_name,
@@ -141,7 +141,7 @@ async function postLessonsDetails(req) {
                 let resources = item.lessons[i].resources
                   ? item.lessons[i].resources
                   : 0;
-                var lesson_progress = new Tv_lesson_progress({
+                const lesson_progress = new Tv_lesson_progress({
                   device_id,
                   class_id,
                   class_name,
@@ -162,7 +162,7 @@ async function postLessonsDetails(req) {
                 let percentage = item.assessments[i].percentage
                   ? item.assessments[i].percentage
                   : 0;
-                var assessment_progress = new Tv_assessment_progress({
+                const assessment_progress = new Tv_assessment_progress({
                   device_id,
                   class_id,
                   class_name,
@@ -180,7 +180,7 @@ async function postLessonsDetails(req) {
                 let storie_id = item.stories[i].id.trim();
                 let storie_name = item.stories[i].name.trim();
                 let points = item.stories[i].points ? item.stories[i].points : 0;
-                var storie_progress = new Tv_stories_progress({
+                const storie_progress = new Tv_stories_progress({
                   device_id,
                   class_id,
                   class_name,

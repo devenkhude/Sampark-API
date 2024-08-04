@@ -18,9 +18,9 @@ router.delete("/:id", _delete);
 module.exports = router;
 
 function search(req, res, next) {
-  const device_id = req.query.device_id || "";
-  const userid = req.query.user || "";
-  const searchstring = req.query.searchstring || "";
+  const device_id = req?.query?.device_id || "";
+  const userid = req?.query?.user || "";
+  const searchstring = req?.query?.searchstring || "";
 
   // Ensure userid is not the string "undefined"
   const sanitizedUserId = userid === "undefined" ? "" : userid;
@@ -40,9 +40,9 @@ function create(req, res, next) {
 }
 
 function getList(req, res, next) {
-  const userid = req.query.user || "";
-  const device_id = req.query.device_id || "";
-  const apk_version = req.query.apk_version || "";
+  const userid = req?.query?.user || "";
+  const device_id = req?.query?.device_id || "";
+  const apk_version = req?.query?.apk_version || "";
 
   lessonService
     .getList(userid, device_id, apk_version)
@@ -65,10 +65,10 @@ function vocabularyviewed(req, res, next) {
 }
 
 function getAllLessons(req, res, next) {
-  const subjectname = req.query.subject || "";
-  const departmentname = req.query.department || "";
-  const userid = req.query.user || "";
-  const category = req.query.category || "";
+  const subjectname = req?.query?.subject || "";
+  const departmentname = req?.query?.department || "";
+  const userid = req?.query?.user || "";
+  const category = req?.query?.category || "";
 
   // Ensure userid is not the string "undefined"
   const sanitizedUserId = userid === "undefined" ? "" : userid;
@@ -85,8 +85,8 @@ function getAllLessons(req, res, next) {
 }
 
 function getCurrent(req, res, next) {
-  const userid = req.query.user || "";
-  const device_id = req.query.device_id || "";
+  const userid = req?.query?.user || "";
+  const device_id = req?.query?.device_id || "";
 
   // Ensure userid and device_id are not the string "undefined"
   const sanitizedUserId = userid === "undefined" ? "" : userid;
@@ -106,20 +106,20 @@ function edit(req, res, next) {
 }
 
 function getById(req, res, next) {
-  const userid = req.query.user || "";
+  const userid = req?.query?.user || "";
 
   // Ensure userid is not the string "undefined"
   const sanitizedUserId = userid === "undefined" ? "" : userid;
 
   lessonService
-    .getById(req.params.id, sanitizedUserId)
+    .getById(req?.params?.id, sanitizedUserId)
     .then((lesson) => (lesson ? res.json(lesson) : res.sendStatus(404)))
     .catch((err) => next(err));
 }
 
 function update(req, res, next) {
   lessonService
-    .update(req.params.id, req)
+    .update(req?.params?.id, req)
     .then((lesson) => (lesson ? res.json(lesson) : res.sendStatus(404)))
     //.then(() => res.json({}))
     .catch((err) => next(err));

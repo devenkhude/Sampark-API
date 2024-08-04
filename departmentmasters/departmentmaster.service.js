@@ -23,18 +23,19 @@ async function getAllWithSubjects() {
     const subject_masters = await Subjectmaster.find()
       .sort({ sort_order: 1 })
       .select("-hash");
+    console.log("Subject Masters: ", subject_masters, "getAllWithSubjects");
     const department_masters = await Departmentmaster.find()
       .sort({ sort_order: 1 })
       .select("-hash");
-
+      console.log("Department Masters: ", department_masters, "getAllWithSubjects");
     const subjects = subject_masters.reduce((acc, subjectMaster) => {
       acc[subjectMaster.id] = {
-        id: subjectMaster.id,
-        name: subjectMaster.name,
-        is_default: subjectMaster.is_default,
-        for_registration: subjectMaster.for_registration || false,
+        id: subjectMaster?.id,
+        name: subjectMaster?.name,
+        is_default: subjectMaster?.is_default,
+        for_registration: subjectMaster?.for_registration || false,
         registration_name:
-          subjectMaster.registration_name || subjectMaster.name,
+          subjectMaster?.registration_name || subjectMaster?.name,
       };
       return acc;
     }, {});
@@ -51,20 +52,20 @@ async function getAllWithSubjects() {
     let default_subject = true;
 
     department_masters.forEach((departmentMaster) => {
-      const department_subjects = departmentMaster.subjects;
+      const department_subjects = departmentMaster?.subjects;
       const department_subject_details = [];
 
       department_subjects.forEach(async (departmentSubject) => {
         const video_count = await Video.find({
-          department: departmentMaster.id,
+          department: departmentMaster?.id,
           subject: departmentSubject,
         }).countDocuments();
 
         const curSubject = {
-          name: subjects[departmentSubject].name,
-          for_registration: subjects[departmentSubject].for_registration,
-          registration_name: subjects[departmentSubject].registration_name,
-          id: subjects[departmentSubject].id,
+          name: subjects[departmentSubject]?.name,
+          for_registration: subjects[departmentSubject]?.for_registration,
+          registration_name: subjects[departmentSubject]?.registration_name,
+          id: subjects[departmentSubject]?.id,
           is_default: default_subject,
           videos: video_count,
         };
@@ -75,20 +76,20 @@ async function getAllWithSubjects() {
 
       const department_master = {
         subjects: department_subject_details,
-        name: departmentMaster.name,
-        for_registration: departmentMaster.for_registration || false,
+        name: departmentMaster?.name,
+        for_registration: departmentMaster?.for_registration || false,
         registration_name:
-          departmentMaster.registration_name || departmentMaster.name,
+          departmentMaster?.registration_name || departmentMaster?.name,
         is_default: final_data[departmentMaster.module].length === 0,
-        id: departmentMaster.id,
+        id: departmentMaster?.id,
       };
 
       final_data[departmentMaster.module].push(department_master);
     });
-
+    console.log("Final Data: ", final_data, "getAllWithSubjects");
     defer.resolve(final_data);
   } catch (err) {
-    console.error("error", err);
+    console.log("Error in: ", err, "getAllWithSubjects");
     defer.reject(err);
   }
 
@@ -100,7 +101,11 @@ async function getAllWithSubjects() {
  * @returns departments list
  */
 async function getAll() {
-  return await Departmentmaster.find().select("-hash");
+  try {
+    return await Departmentmaster.find().select("-hash");
+  } catch (error) {
+    console.log("Error in: ", error, "getAllDepartments");
+  }
 }
 
 /**
@@ -108,7 +113,11 @@ async function getAll() {
  * @returns department object
  */
 async function getById(id) {
-  return await Departmentmaster.findById(id).select("-hash");
+  try {
+    return await Departmentmaster.findById(id).select("-hash");
+  } catch(error) {
+    console.log("Error in: ", error, "getAllDepartmentsByID");
+  }
 }
 
 async function create(req) {
