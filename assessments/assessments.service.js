@@ -1475,7 +1475,7 @@ async function getRewardDetails(userParam) {
     console.log("Reward List: ", rewardList, "getRewardDetails");
     rewardList.forEach(item => {
       if (item?.videoStory) {
-        item?.videoStory?.thumbnail = config?.repositoryHost + item?.videoStory?.thumbnail;
+        item.videoStory.thumbnail = config?.repositoryHost + item?.videoStory?.thumbnail;
       }
     });
   
