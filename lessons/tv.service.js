@@ -45,7 +45,6 @@ const url = require('url');
 const http = require('http');
 const https = require('https');
 const path = require('path');
-const _ = require('underscore');
 let TinyURL = require('tinyurl');
 let q = require('q');
 const { Console } = require('console');
