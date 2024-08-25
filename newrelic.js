@@ -30,6 +30,13 @@ exports.config = {
     enabled: true
   },
 
+  application_logging: {
+    forwarding: {
+      enabled: true,
+      max_samples_stored: 10000
+    }
+  },
+
   logging: {
     /**
      * Level at which to log. 'trace' is most useful to New Relic when diagnosing
